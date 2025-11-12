@@ -5,3 +5,13 @@ venv/
 *.json
 dist/
 build/
+
+.venv/
+__pycache__/
+*.pyc
+data/
+*.sqlite
+*.json
+.vscode/
+*.egg-info/
+
