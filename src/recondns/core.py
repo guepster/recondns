@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from recondns.sources.passive import gather_passive
 
 # Logging basic
 logger = logging.getLogger("recondns")
@@ -223,6 +224,8 @@ def snapshot_domain(domain: str, use_crt: bool = True,
     now = datetime.utcnow().isoformat() + "Z"
     dns_records = get_dns_records(domain, resolver_ip=resolver_ip)
     crt_subs: List[str] = []
+    passive_subs = gather_passive(domain, sources=chosen_sources)
+    all_subdomains |= passive_subs
     subs_data: Dict[str, Dict[str, List[str]]] = {}
     takeover_checks: List[dict] = []
 
