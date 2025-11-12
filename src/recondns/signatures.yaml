@@ -1,0 +1,108 @@
+# signatures.yaml
+# Signatures pour détection de takeover (MVP avancé)
+# Chaque entrée:
+# - id: identifiant
+#   provider: nom lisible
+#   method: body_contains | status | header_contains | status_or_body
+#   match: texte à chercher dans le body (insensible casse)
+#   header: header name to check (for header_contains)
+#   status: code HTTP attendu (pour status)
+#   note: info additionnelle
+
+- id: github_pages
+  provider: "GitHub Pages"
+  method: "body_contains"
+  match: "there isn't a github pages site here."
+  note: "GitHub Pages default message"
+
+- id: github_pages_header
+  provider: "GitHub Pages"
+  method: "header_contains"
+  header: "server"
+  match: "github.com"
+  note: "server header may include github"
+
+- id: heroku
+  provider: "Heroku"
+  method: "body_contains"
+  match: "no such app"
+  note: "Heroku common message"
+
+- id: heroku_404
+  provider: "Heroku"
+  method: "status_or_body"
+  status: 404
+  match: "no such app"
+
+- id: netlify
+  provider: "Netlify"
+  method: "body_contains"
+  match: "requested site is not found"
+
+- id: vercel
+  provider: "Vercel"
+  method: "body_contains"
+  match: "fantôme" # placeholder (Vercel messages can vary)
+  note: "Vercel messages vary — rely on status/headers too"
+
+- id: render
+  provider: "Render"
+  method: "body_contains"
+  match: "render.com"
+  note: "render default pages often mention render.com"
+
+- id: surge
+  provider: "Surge.sh"
+  method: "body_contains"
+  match: "surge.sh"
+  note: "Surge hosted page marker"
+
+- id: netlify_alt
+  provider: "Netlify"
+  method: "body_contains"
+  match: "project not found"
+
+- id: aws_s3
+  provider: "AWS S3"
+  method: "body_contains"
+  match: "noSuchBucket"
+  note: "S3 XML error"
+
+- id: cloudfront
+  provider: "CloudFront"
+  method: "body_contains"
+  match: "the request could not be satisfied"
+
+- id: fastly
+  provider: "Fastly"
+  method: "body_contains"
+  match: "fastly error: unknown domain"
+
+- id: azure_static
+  provider: "Azure Static Web Apps / App Services"
+  method: "body_contains"
+  match: "website is not available"
+
+- id: firebase
+  provider: "Firebase Hosting"
+  method: "body_contains"
+  match: "firebasehosting"
+  note: "firebase hosting markers"
+
+- id: gitlab_pages
+  provider: "GitLab Pages"
+  method: "body_contains"
+  match: "gitlab"
+  note: "GitLab pages default"
+
+- id: digitalocean_app
+  provider: "DigitalOcean App Platform"
+  method: "body_contains"
+  match: "app platform"
+  note: "DO managed apps"
+
+- id: default_404
+  provider: "Generic 404"
+  method: "status"
+  status: 404
+  note: "Generic 404 might indicate unprovisioned"

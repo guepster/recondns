@@ -1,0 +1,2 @@
+[console_scripts]
+recondns = recondns.cli:main
