@@ -29,11 +29,11 @@ Ce que ça affiche :
 
 Options utiles :
 
-- --no-crt : désactive crt.sh (plus rapide / plus discret)
-- -r, --resolver : forcer un résolveur (ex: 1.1.1.1 ou 1.1.1.1,8.8.8.8)
-- --wordlist : bruteforce léger de sous-domaines
-- --bruteforce-depth : profondeur du bruteforce (par défaut 1)
-- --check-takeover + --signatures + --provider-filter : takeover
+- ```--no-crt``` : désactive crt.sh (plus rapide / plus discret)
+- ```-r, --resolver``` : forcer un résolveur (ex: 1.1.1.1 ou 1.1.1.1,8.8.8.8)
+- ```--wordlist``` : bruteforce léger de sous-domaines
+- ```--bruteforce-depth``` : profondeur du bruteforce (par défaut 1)
+- ```--check-takeover``` + ```--signatures``` + ```--provider-filter``` : takeover
 
 ## Résumé DNS + passif
 ```recondns info example.com```
