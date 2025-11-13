@@ -19,21 +19,21 @@ recondns = un mini “amass-lite” focalisé sur la surveillance DNS et la dét
 ---
 
 # Résumé rapide : info
-_Ce que ça affiche :_
+Ce que ça affiche :
 
-_- Compteurs DNS (A / AAAA / NS / MX / TXT / CNAME)_
-_- Nombre de sous-domaines trouvés (crt.sh + passif + bruteforce)_
-_- Éventuels findings de subdomain takeover_
-_- IP enrichment : ASN, pays, cloud (AWS / GCP / Azure /…)_
-_- Mail security : MX, SPF, DMARC, DKIM (hint)_
+- Compteurs DNS (A / AAAA / NS / MX / TXT / CNAME)
+- Nombre de sous-domaines trouvés (crt.sh + passif + bruteforce)
+- Éventuels findings de subdomain takeover
+- IP enrichment : ASN, pays, cloud (AWS / GCP / Azure /…)
+- Mail security : MX, SPF, DMARC, DKIM (hint)
 
-_Options utiles :_
+Options utiles :
 
-_- --no-crt : désactive crt.sh (plus rapide / plus discret)_
-_- -r, --resolver : forcer un résolveur (ex: 1.1.1.1 ou 1.1.1.1,8.8.8.8)_
-_- --wordlist : bruteforce léger de sous-domaines_
-_- --bruteforce-depth : profondeur du bruteforce (par défaut 1)_
-_- --check-takeover + --signatures + --provider-filter : takeover_
+- --no-crt : désactive crt.sh (plus rapide / plus discret)
+- -r, --resolver : forcer un résolveur (ex: 1.1.1.1 ou 1.1.1.1,8.8.8.8)
+- --wordlist : bruteforce léger de sous-domaines
+- --bruteforce-depth : profondeur du bruteforce (par défaut 1)
+- --check-takeover + --signatures + --provider-filter : takeover
 
 ## Résumé DNS + passif
 recondns info example.com
@@ -47,13 +47,13 @@ recondns info example.com --check-takeover --provider-filter aws
 ---
 
 # Snapshot complet : snapshot
-_Contenu du JSON :_
-  _- dns : enregistrements A/AAAA/NS/MX/TXT/CNAME_
-  _- crt_subdomains : sous-domaines trouvés (passif + bruteforce)_
-  _- crt_subdomains_resolved : sous-domaines résolus en A_
-  _- takeover_checks : résultats des checks takeover_
-  _- ip_enrichment : infos ASN / pays / cloud pour chaque IP_
-  _- mail_security : MX / SPF / DMARC / DKIM (hint)_
+Contenu du JSON :
+  - dns : enregistrements A/AAAA/NS/MX/TXT/CNAME
+  - crt_subdomains : sous-domaines trouvés (passif + bruteforce)
+  - crt_subdomains_resolved : sous-domaines résolus en A
+  - takeover_checks : résultats des checks takeover
+  - ip_enrichment : infos ASN / pays / cloud pour chaque IP
+  - mail_security : MX / SPF / DMARC / DKIM (hint)
 
 ## Snapshot simple en JSON
 recondns snapshot example.com
@@ -77,10 +77,10 @@ recondns history example.com --db data/recondns.sqlite --md --out history.md
 ---
 
 # Diff (commande)
-_Le diff montre :_
-  _- Diff DNS (ajouts / retraits par type)_
-  _- Sous-domaines ajoutés / retirés_
-  _- Changement sur les findings takeover_
+Le diff montre :
+  - Diff DNS (ajouts / retraits par type)
+  - Sous-domaines ajoutés / retirés
+  - Changement sur les findings takeover
 
 ## Diff console
 recondns diff example.com --db data/recondns.sqlite --from 3 --to 7
@@ -91,7 +91,7 @@ recondns diff example.com --db data/recondns.sqlite --from 3 --to 7 --html diff_
 ---
 
 # Mode fichiers : track, timeline, diff-json
-_Les snapshots JSON sont stockés dans : data/<domaine>/YYYYmmdd_HHMMSS[_{label}].json._
+Les snapshots JSON sont stockés dans : data/<domaine>/YYYYmmdd_HHMMSS[_{label}].json.
 
 ## Scan et snapshot JSON local
 recondns track example.com
