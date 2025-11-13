@@ -1,23 +1,40 @@
-from __future__ import annotations
-
 import dns.resolver
 from cachetools import TTLCache
-from typing import List, Optional, Dict
 
+# --- Defaults (nécessaires au resolver)
+DEFAULT_TIMEOUT = 3.0
+DEFAULT_RETRIES = 1
 
-# Cache DNS TTL (modifiable via CLI)
+# --- Cache DNS global
 DNS_CACHE = TTLCache(maxsize=5000, ttl=30)
 
 
-def make_resolver(servers: List[str], timeout: float = 2.0, retries: int = 1) -> dns.resolver.Resolver:
-    """
-    Crée un résolveur DNS robuste avec timeout et retries.
-    """
-    r = dns.resolver.Resolver(configure=False)
-    r.nameservers = servers
-    r.lifetime = timeout
-    r.retry_servfail = False
+def make_resolver(
+    nameservers=None,
+    timeout: float = DEFAULT_TIMEOUT,
+    retries: int = DEFAULT_RETRIES,
+) -> dns.resolver.Resolver:
+    r = dns.resolver.Resolver(configure=True)
+
+    # Normalise nameservers en liste de chaînes
+    ns_list = []
+    if isinstance(nameservers, str):
+        # "1.1.1.1,8.8.8.8"
+        ns_list = [s.strip() for s in nameservers.split(",") if s.strip()]
+    elif isinstance(nameservers, list | tuple):
+        ns_list = [str(s).strip() for s in nameservers if str(s).strip()]
+
+    # Si rien fourni, on prend ceux du système, sinon fallback sur un DNS public
+    if not ns_list:
+        current = list(getattr(r, "nameservers", []) or [])
+        if current:
+            ns_list = current
+        else:
+            ns_list = ["8.8.8.8"]
+
+    r.nameservers = ns_list
     r.timeout = timeout
+    r.lifetime = timeout
     return r
 
 
@@ -25,7 +42,7 @@ def resolve_cached(
     hostname: str,
     qtype: str,
     resolver: dns.resolver.Resolver,
-) -> List[str]:
+) -> list[str]:
     """
     Essaie de résoudre <hostname>.<qtype> avec cache TTL.
     """

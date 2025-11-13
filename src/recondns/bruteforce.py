@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Set, List
 
-
-def _load_wordlist(path: str) -> List[str]:
+def _load_wordlist(path: str) -> list[str]:
     """Charge une wordlist (une entrée par ligne)."""
-    words: List[str] = []
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+    words: list[str] = []
+    with open(path, encoding="utf-8", errors="ignore") as f:
         for line in f:
             w = line.strip()
             if not w or w.startswith("#"):
@@ -15,7 +13,7 @@ def _load_wordlist(path: str) -> List[str]:
     return words
 
 
-def bruteforce_subdomains(root: str, wordlist_path: str, depth: int = 1) -> Set[str]:
+def bruteforce_subdomains(root: str, wordlist_path: str, depth: int = 1) -> set[str]:
     """
     Génère des sous-domaines de type <word>.<root>.
 
@@ -23,7 +21,7 @@ def bruteforce_subdomains(root: str, wordlist_path: str, depth: int = 1) -> Set[
     pour l'instant on reste sur du léger.
     """
     root = root.strip().strip(".").lower()
-    subs: Set[str] = set()
+    subs: set[str] = set()
 
     words = _load_wordlist(wordlist_path)
     for w in words:

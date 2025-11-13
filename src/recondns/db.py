@@ -1,7 +1,7 @@
-import os
 import json
+import os
 import sqlite3
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
 CREATE INDEX IF NOT EXISTS idx_snapshots_domain_ts ON snapshots(domain, ts);
 """
 
+
 def init_db(db_path: str):
     os.makedirs(os.path.dirname(db_path), exist_ok=True) if os.path.dirname(db_path) else None
     con = sqlite3.connect(db_path)
@@ -22,33 +23,36 @@ def init_db(db_path: str):
     finally:
         con.close()
 
-def save_snapshot(db_path: str, report: Dict[str, Any]) -> int:
+
+def save_snapshot(db_path: str, report: dict[str, Any]) -> int:
     con = sqlite3.connect(db_path)
     try:
         cur = con.cursor()
         cur.execute(
             "INSERT INTO snapshots(domain, ts, report_json) VALUES (?, ?, ?)",
-            (report.get("domain"), report.get("timestamp"), json.dumps(report, ensure_ascii=False))
+            (report.get("domain"), report.get("timestamp"), json.dumps(report, ensure_ascii=False)),
         )
         con.commit()
         return cur.lastrowid
     finally:
         con.close()
 
-def list_snapshots(db_path: str, domain: str, limit: int = 20) -> List[Dict[str, Any]]:
+
+def list_snapshots(db_path: str, domain: str, limit: int = 20) -> list[dict[str, Any]]:
     con = sqlite3.connect(db_path)
     try:
         cur = con.cursor()
         cur.execute(
             "SELECT id, domain, ts FROM snapshots WHERE domain = ? ORDER BY ts DESC LIMIT ?",
-            (domain, limit)
+            (domain, limit),
         )
         rows = cur.fetchall()
         return [{"id": r[0], "domain": r[1], "ts": r[2]} for r in rows]
     finally:
         con.close()
 
-def get_snapshot_by_id(db_path: str, snap_id: int) -> Optional[Dict[str, Any]]:
+
+def get_snapshot_by_id(db_path: str, snap_id: int) -> dict[str, Any] | None:
     con = sqlite3.connect(db_path)
     try:
         cur = con.cursor()

@@ -1,5 +1,6 @@
-import requests
 import logging
+
+import requests
 
 logger = logging.getLogger("recondns")
 
@@ -20,6 +21,7 @@ COMMON_CLOUDS = {
     "hetzner": "Hetzner",
 }
 
+
 def detect_cloud(as_name: str) -> str:
     if not as_name:
         return "Unknown"
@@ -28,6 +30,7 @@ def detect_cloud(as_name: str) -> str:
         if k in lower:
             return v
     return "Other"
+
 
 def enrich_ip(ip: str) -> dict:
     """Enrichit l'IP avec ASN, pays, provider cloud."""
@@ -49,7 +52,7 @@ def enrich_ip(ip: str) -> dict:
             "asn": int(asn) if asn and asn.isdigit() else None,
             "as_name": as_name,
             "country": data.get("country"),
-            "cloud_provider": detect_cloud(as_name or "")
+            "cloud_provider": detect_cloud(as_name or ""),
         }
 
     except Exception as e:

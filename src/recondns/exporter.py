@@ -1,4 +1,5 @@
-from .utils import save_json, make_snapshot_filename
+from .utils import make_snapshot_filename, save_json
+
 
 def export_snapshot(report, outpath=None):
     if outpath:

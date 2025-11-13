@@ -1,8 +1,9 @@
 # src/recondns/sources/passive.py
 
-import os
 import logging
-from typing import Iterable, Set, Callable, Optional, List
+import os
+from collections.abc import Callable, Iterable
+
 import requests
 
 logger = logging.getLogger("recondns.passive")
@@ -12,8 +13,9 @@ USER_AGENT = "recondns/0.2 (+https://github.com/yourname/recondns-cli)"
 # ------------------ Utils ------------------
 
 
-def _normalize_name(name: str, domain: str) -> Optional[str]:
-    """Nettoie un nom : enlève les wildcards, espaces, garde seulement les sous-domaines du domain."""
+def _normalize_name(name: str, domain: str) -> str | None:
+    """Nettoie un nom : enlève les wildcards, espaces, garde
+    seulement les sous-domaines du domain."""
     if not isinstance(name, str):
         return None
     n = name.strip().lower()
@@ -27,8 +29,8 @@ def _normalize_name(name: str, domain: str) -> Optional[str]:
     return n
 
 
-def _dedupe_filter(names: Iterable[str], domain: str) -> Set[str]:
-    out: Set[str] = set()
+def _dedupe_filter(names: Iterable[str], domain: str) -> set[str]:
+    out: set[str] = set()
     for n in names:
         nn = _normalize_name(n, domain)
         if nn:
@@ -39,7 +41,7 @@ def _dedupe_filter(names: Iterable[str], domain: str) -> Set[str]:
 # ------------------ CertSpotter ------------------
 
 
-def certspotter(domain: str) -> Set[str]:
+def certspotter(domain: str) -> set[str]:
     """
     Récupère les sous-domaines via CertSpotter.
 
@@ -66,7 +68,7 @@ def certspotter(domain: str) -> Set[str]:
             logger.warning("CertSpotter HTTP %s for %s", resp.status_code, domain)
             return set()
         data = resp.json()
-        found: Set[str] = set()
+        found: set[str] = set()
         for entry in data:
             dns_names = entry.get("dns_names") or []
             for name in dns_names:
@@ -82,9 +84,10 @@ def certspotter(domain: str) -> Set[str]:
 # ------------------ BufferOver (dns.bufferover.run) ------------------
 
 
-def bufferover(domain: str) -> Set[str]:
+def bufferover(domain: str) -> set[str]:
     """
-    Utilise dns.bufferover.run pour récupérer des sous-domaines à partir des enregistrements FDNS_A / FDNS_CNAME.
+    Utilise dns.bufferover.run pour récupérer des sous-domaines à partir
+    des enregistrements FDNS_A / FDNS_CNAME.
     """
     url = f"https://dns.bufferover.run/dns?q=.{domain}"
     headers = {"User-Agent": USER_AGENT}
@@ -94,7 +97,7 @@ def bufferover(domain: str) -> Set[str]:
             logger.warning("BufferOver HTTP %s for %s", resp.status_code, domain)
             return set()
         data = resp.json()
-        candidates: Set[str] = set()
+        candidates: set[str] = set()
 
         for key in ("FDNS_A", "FDNS_CNAME"):
             entries = data.get(key) or []
@@ -118,7 +121,7 @@ def bufferover(domain: str) -> Set[str]:
 # ------------------ HackerTarget (fallback léger) ------------------
 
 
-def hackertarget(domain: str) -> Set[str]:
+def hackertarget(domain: str) -> set[str]:
     """
     Utilise l'API gratuite de HackerTarget (limites fortes, mais utile en fallback).
 
@@ -130,12 +133,13 @@ def hackertarget(domain: str) -> Set[str]:
     headers = {"User-Agent": USER_AGENT}
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=15)
-        # HackerTarget renvoie 200 même en cas d'erreur, souvent sous forme de texte. On filtre un peu.
+        # HackerTarget renvoie 200 même en cas d'erreur,
+        # souvent sous forme de texte. On filtre un peu.
         if resp.status_code != 200:
             logger.warning("HackerTarget HTTP %s for %s", resp.status_code, domain)
             return set()
         text = resp.text
-        candidates: Set[str] = set()
+        candidates: set[str] = set()
         for line in text.splitlines():
             line = line.strip()
             if not line or "," not in line:
@@ -153,8 +157,8 @@ def hackertarget(domain: str) -> Set[str]:
 
 def gather_passive(
     domain: str,
-    sources: Optional[List[Callable[[str], Set[str]]]] = None,
-) -> Set[str]:
+    sources: list[Callable[[str], set[str]]] | None = None,
+) -> set[str]:
     """
     Combine plusieurs sources passives en un seul set de sous-domaines.
     Par défaut : CertSpotter + BufferOver + HackerTarget.
@@ -162,7 +166,7 @@ def gather_passive(
     if sources is None:
         sources = [certspotter, bufferover, hackertarget]
 
-    all_names: Set[str] = set()
+    all_names: set[str] = set()
     for fn in sources:
         try:
             subnames = fn(domain)

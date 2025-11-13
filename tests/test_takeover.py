@@ -1,5 +1,7 @@
+from unittest.mock import patch
+
 import recondns.core as core
-from unittest.mock import patch, Mock
+
 
 # simulate a response object with attributes .status_code, .text, .headers
 class DummyResp:
@@ -7,6 +9,7 @@ class DummyResp:
         self.status_code = status
         self.text = text
         self.headers = headers or {}
+
 
 def mocked_requests_get(url, headers=None, timeout=None, allow_redirects=None):
     # mimic different hosts by url
@@ -18,12 +21,18 @@ def mocked_requests_get(url, headers=None, timeout=None, allow_redirects=None):
         return DummyResp(404, "<Error>NoSuchBucket</Error>", {"server": "AmazonS3"})
     return DummyResp(200, "Hello world", {})
 
+
 @patch("recondns.core.requests.get", side_effect=mocked_requests_get)
 def test_check_single_host_takeover(mock_get):
     # load signatures from package (should exist)
     sigs = core.load_takeover_signatures(path=None)
     # make a small set of hosts that our mock recognizes
-    hosts = ["test.github.example", "myapp.herokuapp.example", "bucket.s3.example", "normal.example"]
+    hosts = [
+        "test.github.example",
+        "myapp.herokuapp.example",
+        "bucket.s3.example",
+        "normal.example",
+    ]
     alerts = []
     for h in hosts:
         res = core.check_single_host_takeover(h, sigs, verbose=False)

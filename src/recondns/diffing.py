@@ -1,20 +1,27 @@
-from typing import Dict, Any, List, Set
+from typing import Any
+
 
 def _as_set(lst):
     return set(lst or [])
 
+
 def _dict_sets(d):
     return {k: _as_set(v) for k, v in (d or {}).items()}
 
-def diff_reports(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+
+def diff_reports(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     """
     Compare deux reports (snapshots) recondns et retourne un dict:
     - dns: par type (A, NS, MX, TXT, CNAME...) -> added/removed
     - crt_subdomains: added/removed
     - takeover: added/removed (par host+provider)
     """
-    out = {"meta": {"domain": a.get("domain"), "from": a.get("timestamp"), "to": b.get("timestamp")},
-           "dns": {}, "crt_subdomains": {}, "takeover": {}}
+    out = {
+        "meta": {"domain": a.get("domain"), "from": a.get("timestamp"), "to": b.get("timestamp")},
+        "dns": {},
+        "crt_subdomains": {},
+        "takeover": {},
+    }
 
     # DNS diffs
     dns_a = _dict_sets(a.get("dns"))
@@ -37,7 +44,7 @@ def diff_reports(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     # takeover diffs (host+provider key)
     def _tk_set(report):
         s = set()
-        for item in (report.get("takeover_checks") or []):
+        for item in report.get("takeover_checks") or []:
             key = f"{item.get('host')}|{item.get('provider')}"
             s.add(key)
         return s

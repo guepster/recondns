@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Dict, Any, List, Set, Tuple
+from typing import Any
 
 
-def _normalize_dns_map(d: Dict[str, List[str]] | None) -> Dict[str, List[str]]:
+def _normalize_dns_map(d: dict[str, list[str]] | None) -> dict[str, list[str]]:
     """
     Normalise la map DNS sous forme:
     { "A": ["1.2.3.4", ...], "MX": ["mx1...", ...] }
@@ -12,7 +12,7 @@ def _normalize_dns_map(d: Dict[str, List[str]] | None) -> Dict[str, List[str]]:
     if not isinstance(d, dict):
         return {}
 
-    out: Dict[str, List[str]] = {}
+    out: dict[str, list[str]] = {}
     for rtype, values in d.items():
         if not isinstance(values, list):
             continue
@@ -21,12 +21,12 @@ def _normalize_dns_map(d: Dict[str, List[str]] | None) -> Dict[str, List[str]]:
     return out
 
 
-def _simple_list_diff(old: List[str], new: List[str]) -> Dict[str, List[str]]:
+def _simple_list_diff(old: list[str], new: list[str]) -> dict[str, list[str]]:
     """
     Retourne {added: [...], removed: [...]} entre deux listes.
     """
-    old_set: Set[str] = {str(x) for x in old}
-    new_set: Set[str] = {str(x) for x in new}
+    old_set: set[str] = {str(x) for x in old}
+    new_set: set[str] = {str(x) for x in new}
     added = sorted(new_set - old_set)
     removed = sorted(old_set - new_set)
     return {
@@ -35,7 +35,7 @@ def _simple_list_diff(old: List[str], new: List[str]) -> Dict[str, List[str]]:
     }
 
 
-def _takeover_key(entry: Dict[str, Any]) -> Tuple:
+def _takeover_key(entry: dict[str, Any]) -> tuple:
     """
     Clef stable pour comparer deux résultats de takeover.
 
@@ -55,7 +55,7 @@ def _takeover_key(entry: Dict[str, Any]) -> Tuple:
     )
 
 
-def diff_reports(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+def diff_reports(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     """
     Calcule les différences entre deux rapports de snapshot.
 
@@ -91,7 +91,7 @@ def diff_reports(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
     old_dns = _normalize_dns_map(old.get("dns") or {})
     new_dns = _normalize_dns_map(new.get("dns") or {})
 
-    dns_diff: Dict[str, Dict[str, List[str]]] = {}
+    dns_diff: dict[str, dict[str, list[str]]] = {}
     all_rtypes = sorted(set(old_dns.keys()) | set(new_dns.keys()))
     for rtype in all_rtypes:
         o_list = old_dns.get(rtype, [])
@@ -131,7 +131,7 @@ def diff_reports(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def diff_snapshots(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+def diff_snapshots(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     """
     Alias simple pour compat éventuelle.
     """
@@ -142,17 +142,18 @@ def diff_snapshots(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
 # HTML EXPORT
 # ---------------------------------------------------------------------------
 
+
 def _html_escape(s: str) -> str:
     return (
         s.replace("&", "&amp;")
-         .replace("<", "&lt;")
-         .replace(">", "&gt;")
-         .replace('"', "&quot;")
-         .replace("'", "&#39;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
     )
 
 
-def diff_to_html(domain: str, diff: Dict[str, Any]) -> str:
+def diff_to_html(domain: str, diff: dict[str, Any]) -> str:
     """
     Génère un rapport HTML autonome (un seul fichier) à partir d'un diff.
     """
@@ -166,7 +167,8 @@ def diff_to_html(domain: str, diff: Dict[str, Any]) -> str:
     # Styles simples inline (pas de CSS externe)
     css = """
     body {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: system-ui, -apple-system, 
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: #0f172a;
         color: #e5e7eb;
         margin: 0;
@@ -238,7 +240,9 @@ def diff_to_html(domain: str, diff: Dict[str, Any]) -> str:
         border-radius: 999px;
         background: #1f2933;
         margin: 0.1rem 0.2rem 0.1rem 0;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-family: ui-monospace, SFMono-Regular, Menlo, 
+        Monaco, Consolas, "Liberation Mono", "Courier New", 
+        monospace;
         font-size: 0.8rem;
     }
     .section {
@@ -250,12 +254,12 @@ def diff_to_html(domain: str, diff: Dict[str, Any]) -> str:
     }
     """
 
-    html_parts: List[str] = []
+    html_parts: list[str] = []
 
     html_parts.append("<!DOCTYPE html>")
     html_parts.append("<html lang='en'>")
     html_parts.append("<head>")
-    html_parts.append(f"<meta charset='utf-8'>")
+    html_parts.append("<meta charset='utf-8'>")
     html_parts.append(f"<title>{_html_escape(title)}</title>")
     html_parts.append("<meta name='viewport' content='width=device-width, initial-scale=1'>")
     html_parts.append("<style>")
@@ -287,12 +291,14 @@ def diff_to_html(domain: str, diff: Dict[str, Any]) -> str:
             added_html = (
                 "<span class='badge-added'>+ added</span><br>"
                 + "".join(f"<span class='pill'>{_html_escape(a)}</span>" for a in added)
-                if added else "<span class='muted'>—</span>"
+                if added
+                else "<span class='muted'>—</span>"
             )
             removed_html = (
                 "<span class='badge-removed'>– removed</span><br>"
                 + "".join(f"<span class='pill'>{_html_escape(r)}</span>" for r in removed)
-                if removed else "<span class='muted'>—</span>"
+                if removed
+                else "<span class='muted'>—</span>"
             )
             html_parts.append(
                 "<tr>"
@@ -317,19 +323,16 @@ def diff_to_html(domain: str, diff: Dict[str, Any]) -> str:
         added_html = (
             "<span class='badge-added'>+ added</span><br>"
             + "".join(f"<span class='pill'>{_html_escape(a)}</span>" for a in added)
-            if added else "<span class='muted'>—</span>"
+            if added
+            else "<span class='muted'>—</span>"
         )
         removed_html = (
             "<span class='badge-removed'>– removed</span><br>"
             + "".join(f"<span class='pill'>{_html_escape(r)}</span>" for r in removed)
-            if removed else "<span class='muted'>—</span>"
+            if removed
+            else "<span class='muted'>—</span>"
         )
-        html_parts.append(
-            "<tr>"
-            f"<td>{added_html}</td>"
-            f"<td>{removed_html}</td>"
-            "</tr>"
-        )
+        html_parts.append(f"<tr><td>{added_html}</td><td>{removed_html}</td></tr>")
         html_parts.append("</table>")
     else:
         html_parts.append("<p class='muted'>Aucun changement de sous-domaines CRT.</p>")
@@ -343,7 +346,9 @@ def diff_to_html(domain: str, diff: Dict[str, Any]) -> str:
 
     if to_added or to_removed:
         html_parts.append("<table>")
-        html_parts.append("<tr><th>Type</th><th>Host</th><th>Provider</th><th>Method</th><th>Status</th><th>Match</th></tr>")
+        html_parts.append(
+            "<tr><th>Type</th><th>Host</th><th>Provider</th><th>Method</th><th>Status</th><th>Match</th></tr>"
+        )
 
         for e in to_added:
             html_parts.append(

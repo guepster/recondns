@@ -1,22 +1,18 @@
+import logging
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from typing import Any
+
 import dns.resolver
 import dns.reversename
 import requests
-import time
-import os
 import yaml
-import logging
-from datetime import datetime
-from typing import List, Optional, Dict, Any
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from recondns.sources.passive import gather_passive
-from .sources import passive
-import logging
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Union
-from .bruteforce import bruteforce_subdomains
-from .dns.robust_resolver import make_resolver, resolve_cached, DNS_CACHE
-from .ip_enrich import enrich_many
 
+from .bruteforce import bruteforce_subdomains
+from .dns.robust_resolver import make_resolver, resolve_cached
+from .ip_enrich import enrich_many
 
 logger = logging.getLogger("recondns")
 
@@ -42,15 +38,17 @@ HTTP_BACKOFF = 1.5  # multiplier
 DEFAULT_MAX_WORKERS = 8
 DEFAULT_TAKEOVER_DELAY = 0.2  # delay between host checks to be polite
 
+
 def resource_path(rel: str):
     base = os.path.dirname(__file__)
     return os.path.join(base, rel)
 
-def load_takeover_signatures(path: Optional[str] = None) -> List[dict]:
+
+def load_takeover_signatures(path: str | None = None) -> list[dict]:
     if path is None:
         path = resource_path("signatures.yaml")
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
             if isinstance(data, list):
                 return data
@@ -62,35 +60,21 @@ def load_takeover_signatures(path: Optional[str] = None) -> List[dict]:
         logger.exception("Failed to load signatures.yaml: %s", e)
         return []
 
-def make_resolver(
-    nameservers: Optional[Union[str, List[str]]] = None,
+
+def get_dns_records(
+    domain: str,
+    record_types: list[str] | None = None,
     timeout: float = 5.0,
-):
-    r = dns.resolver.Resolver(configure=True)
-    r.timeout = timeout
-    r.lifetime = timeout
-
-    if nameservers:
-        if isinstance(nameservers, str):
-            # un seul résolveur sous forme de string
-            r.nameservers = [nameservers]
-        else:
-            # déjà une liste ["1.1.1.1", "8.8.8.8", ...]
-            r.nameservers = list(nameservers)
-
-    return r
-
-
-def get_dns_records(domain: str, record_types: Optional[List[str]] = None,
-                    timeout: float = 5.0, resolver_ip: Optional[str] = None) -> Dict[str, List[str]]:
+    resolver_ip: str | None = None,
+) -> dict[str, list[str]]:
     if record_types is None:
         record_types = ["A", "AAAA", "MX", "NS", "TXT", "SOA", "CNAME"]
     res = make_resolver(resolver_ip, timeout=timeout)
-    out: Dict[str, List[str]] = {}
+    out: dict[str, list[str]] = {}
     for rtype in record_types:
         try:
             answers = res.resolve(domain, rtype, raise_on_no_answer=False)
-            values: List[str] = []
+            values: list[str] = []
             if answers is not None:
                 for r in answers:
                     values.append(r.to_text())
@@ -99,7 +83,8 @@ def get_dns_records(domain: str, record_types: Optional[List[str]] = None,
             out[rtype] = []
     return out
 
-def reverse_lookup(ip: str, resolver_ip: Optional[str] = None) -> Optional[str]:
+
+def reverse_lookup(ip: str, resolver_ip: str | None = None) -> str | None:
     try:
         rev = dns.reversename.from_address(ip)
         res = make_resolver(resolver_ip)
@@ -107,9 +92,13 @@ def reverse_lookup(ip: str, resolver_ip: Optional[str] = None) -> Optional[str]:
     except Exception:
         return None
 
-def fetch_crtsh_subdomains(domain: str, timeout: float = DEFAULT_CRTSH_TIMEOUT,
-                           sleep_between: float = DEFAULT_CRTSH_SLEEP,
-                           retries: int = DEFAULT_CRTSH_RETRIES) -> List[str]:
+
+def fetch_crtsh_subdomains(
+    domain: str,
+    timeout: float = DEFAULT_CRTSH_TIMEOUT,
+    sleep_between: float = DEFAULT_CRTSH_SLEEP,
+    retries: int = DEFAULT_CRTSH_RETRIES,
+) -> list[str]:
     url = f"https://crt.sh/?q=%25.{domain}&output=json"
     attempt = 0
     while attempt < retries:
@@ -142,8 +131,14 @@ def fetch_crtsh_subdomains(domain: str, timeout: float = DEFAULT_CRTSH_TIMEOUT,
             time.sleep(1 + attempt)
     return []
 
-def _http_get_with_retries(host: str, scheme: str = "http", timeout: float = HTTP_TIMEOUT,
-                           retries: int = HTTP_RETRIES, backoff: float = HTTP_BACKOFF) -> (Optional[int], Optional[str], Optional[dict]):
+
+def _http_get_with_retries(
+    host: str,
+    scheme: str = "http",
+    timeout: float = HTTP_TIMEOUT,
+    retries: int = HTTP_RETRIES,
+    backoff: float = HTTP_BACKOFF,
+) -> tuple[int | None, str | None, dict[str, Any] | None]:
     url = f"{scheme}://{host}"
     headers = {"User-Agent": USER_AGENT}
     attempt = 0
@@ -163,7 +158,13 @@ def _http_get_with_retries(host: str, scheme: str = "http", timeout: float = HTT
             delay *= backoff
     return None, None, None
 
-def _match_signature_from_response(sig: dict, status: Optional[int], body: Optional[str], headers: Optional[dict]) -> bool:
+
+def _match_signature_from_response(
+    sig: dict[str, Any],
+    status: int | None,
+    body: str | None,
+    headers: dict[str, Any] | None,
+) -> bool:
     method = sig.get("method", "body_contains")
     match = (sig.get("match") or "").lower()
     expected_status = sig.get("status")
@@ -183,8 +184,16 @@ def _match_signature_from_response(sig: dict, status: Optional[int], body: Optio
             return True
     return False
 
-def check_single_host_takeover(host: str, signatures: List[dict], verbose: bool = False) -> List[dict]:
-    alerts: List[dict] = []
+
+from typing import Any  # plus besoin de List/Dict
+
+
+def check_single_host_takeover(
+    host: str,
+    signatures: list[dict[str, Any]],
+    verbose: bool = False,
+) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
     if not signatures:
         return alerts
     # try http then https
@@ -199,29 +208,37 @@ def check_single_host_takeover(host: str, signatures: List[dict], verbose: bool 
         for sig in signatures:
             try:
                 if _match_signature_from_response(sig, status, body, headers):
-                    alerts.append({
-                        "host": host,
-                        "provider": sig.get("provider") or sig.get("id"),
-                        "method": sig.get("method"),
-                        "match": sig.get("match"),
-                        "scheme": scheme,
-                        "status": status
-                    })
+                    alerts.append(
+                        {
+                            "host": host,
+                            "provider": sig.get("provider") or sig.get("id"),
+                            "method": sig.get("method"),
+                            "match": sig.get("match"),
+                            "scheme": scheme,
+                            "status": status,
+                        }
+                    )
             except Exception:
                 # do not let signature matching crash
                 continue
     return alerts
 
-def check_hosts_takeover_parallel(hosts: List[str], signatures: List[dict],
-                                  max_workers: int = DEFAULT_MAX_WORKERS,
-                                  delay_between: float = DEFAULT_TAKEOVER_DELAY,
-                                  verbose: bool = False) -> List[dict]:
-    results: List[dict] = []
+
+def check_hosts_takeover_parallel(
+    hosts: list[str],
+    signatures: list[dict],
+    max_workers: int = DEFAULT_MAX_WORKERS,
+    delay_between: float = DEFAULT_TAKEOVER_DELAY,
+    verbose: bool = False,
+) -> list[dict]:
+    results: list[dict] = []
     if not hosts:
         return results
     # ThreadPool for concurrency
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        future_to_host = {ex.submit(check_single_host_takeover, h, signatures, verbose): h for h in hosts}
+        future_to_host = {
+            ex.submit(check_single_host_takeover, h, signatures, verbose): h for h in hosts
+        }
         for fut in as_completed(future_to_host):
             h = future_to_host[fut]
             try:
@@ -234,7 +251,8 @@ def check_hosts_takeover_parallel(hosts: List[str], signatures: List[dict],
             time.sleep(delay_between)
     return results
 
-def _extract_ips_from_records(records: Dict[str, Any]) -> set[str]:
+
+def _extract_ips_from_records(records: dict[str, Any]) -> set[str]:
     """
     Extrait des IPs d'un bloc de records DNS au format:
     {
@@ -264,7 +282,8 @@ def _extract_ips_from_records(records: Dict[str, Any]) -> set[str]:
 
     return ips
 
-def analyze_mail_security(domain: str, dns_records: Dict[str, Any], resolver) -> Dict[str, Any]:
+
+def analyze_mail_security(domain: str, dns_records: dict[str, Any], resolver) -> dict[str, Any]:
     """
     Analyse basique de la sécu mail:
     - MX providers
@@ -305,27 +324,25 @@ def analyze_mail_security(domain: str, dns_records: Dict[str, Any], resolver) ->
     }
 
 
-
 def snapshot_domain(
     domain: str,
     use_crt: bool = True,
-    resolver_ips: Optional[List[str]] = None,
+    resolver_ips: list[str] | None = None,
     timeout: float = 2.0,
     retries: int = 1,
     # cache_ttl: int = 30,
-    resolve_limit: Optional[int] = None,
+    resolve_limit: int | None = None,
     check_takeover: bool = False,
-    signatures_path: Optional[str] = None,
+    signatures_path: str | None = None,
     takeover_max_workers: int = DEFAULT_MAX_WORKERS,
     takeover_delay: float = DEFAULT_TAKEOVER_DELAY,
     takeover_verbose: bool = False,
-    wordlist: Optional[str] = None,
+    wordlist: str | None = None,
     bruteforce_depth: int = 1,
-) -> Dict[str, Any]:
-
+) -> dict[str, Any]:
     now = datetime.utcnow().isoformat() + "Z"
 
-    #Résolveur robuste
+    # Résolveur robuste
     nameservers = []
     if resolver_ips:
         if resolver_ips:
@@ -333,38 +350,34 @@ def snapshot_domain(
         else:
             nameservers = []
     else:
-        nameservers = ["1.1.1.1","8.8.8.8"]
+        nameservers = ["1.1.1.1", "8.8.8.8"]
 
     resolver = make_resolver(nameservers)
 
     # 1) DNS du domaine racine
     dns_records = {
-    "A": resolve_cached(domain, "A", resolver),
-    "AAAA": resolve_cached(domain, "AAAA", resolver),
-    "CNAME": resolve_cached(domain, "CNAME", resolver),
-    "NS": resolve_cached(domain, "NS", resolver),
-    "MX": resolve_cached(domain, "MX", resolver),
-    "TXT": resolve_cached(domain, "TXT", resolver),
-}
+        "A": resolve_cached(domain, "A", resolver),
+        "AAAA": resolve_cached(domain, "AAAA", resolver),
+        "CNAME": resolve_cached(domain, "CNAME", resolver),
+        "NS": resolve_cached(domain, "NS", resolver),
+        "MX": resolve_cached(domain, "MX", resolver),
+        "TXT": resolve_cached(domain, "TXT", resolver),
+    }
     # 7) Analyse mail (SPF / DMARC / DKIM hint + MX)
     mail_security = analyze_mail_security(domain, dns_records, resolver)
 
-    
     from .enrich import enrich_ip
 
     enrichment = {}
     for ip in dns_records.get("A", []):
-       enrichment[ip] = enrich_ip(ip)
+        enrichment[ip] = enrich_ip(ip)
 
-
-
-
-    crt_subs: List[str] = []
-    subs_data: Dict[str, Dict[str, List[str]]] = {}
-    takeover_checks: List[dict] = []
+    crt_subs: list[str] = []
+    subs_data: dict[str, dict[str, list[str]]] = {}
+    takeover_checks: list[dict] = []
 
     # 2) Signatures takeover
-    signatures: List[dict] = []
+    signatures: list[dict] = []
     if check_takeover:
         signatures = load_takeover_signatures(signatures_path)
 
@@ -381,17 +394,18 @@ def snapshot_domain(
 
         try:
             from .sources import passive  # import local pour éviter cycles
+
             all_subdomains.update(passive.certspotter(domain))
         except Exception as e:
             logger.warning("CertSpotter failed for %s: %s", domain, e)
 
         try:
             from .sources import passive
+
             all_subdomains.update(passive.bufferover(domain))
         except Exception:
             # On ignore simplement si BufferOver ne répond pas
             pass
-
 
     # 4) Bruteforce léger via wordlist
     if wordlist:
@@ -402,13 +416,7 @@ def snapshot_domain(
             logger.warning("Bruteforce wordlist '%s' failed for %s: %s", wordlist, domain, e)
 
     # Normalisation / liste finale des sous-domaines découverts
-    crt_subs = sorted(
-        {
-            s.lower()
-            for s in all_subdomains
-            if isinstance(s, str) and s.strip()
-        }
-    )
+    crt_subs = sorted({s.lower() for s in all_subdomains if isinstance(s, str) and s.strip()})
 
     # 5) Résolution A des sous-domaines (option resolve_limit)
     if crt_subs:
@@ -418,8 +426,9 @@ def snapshot_domain(
             to_resolve = crt_subs
 
         for s in to_resolve:
-            rec = {"A": resolve_cached(s, "A", resolver),
-}
+            rec = {
+                "A": resolve_cached(s, "A", resolver),
+            }
             if rec.get("A"):
                 subs_data[s] = {"A": rec["A"]}
 
@@ -436,10 +445,7 @@ def snapshot_domain(
         for s in subs_data.keys():
             hosts_to_check.add(s)
 
-        hosts_list = [
-            h for h in sorted(hosts_to_check)
-            if any(ch.isalpha() for ch in h)
-        ]
+        hosts_list = [h for h in sorted(hosts_to_check) if any(ch.isalpha() for ch in h)]
 
         if takeover_verbose:
             logger.info(
@@ -467,23 +473,19 @@ def snapshot_domain(
     for rec in subs_data.values():
         ip_set |= _extract_ips_from_records(rec)
 
-    ip_enrichment: Dict[str, Any] = {}
+    ip_enrichment: dict[str, Any] = {}
     if ip_set:
         ip_enrichment = enrich_many(sorted(ip_set))
-    
-    
 
-    # 8) Rapport final
-        report: Dict[str, Any] = {
-        "domain": domain,
-        "timestamp": now,
-        "dns": dns_records,
-        "crt_subdomains": crt_subs,               # passif + bruteforce
-        "crt_subdomains_resolved": subs_data,     # sous-domaines avec A
-        "takeover_checks": takeover_checks,
-        "ip_enrichment": ip_enrichment,           # ASN / pays / cloud
-        "mail_security": mail_security,           
-    }
+        # 8) Rapport final
+        report: dict[str, Any] = {
+            "domain": domain,
+            "timestamp": now,
+            "dns": dns_records,
+            "crt_subdomains": crt_subs,  # passif + bruteforce
+            "crt_subdomains_resolved": subs_data,  # sous-domaines avec A
+            "takeover_checks": takeover_checks,
+            "ip_enrichment": ip_enrichment,  # ASN / pays / cloud
+            "mail_security": mail_security,
+        }
     return report
-
-

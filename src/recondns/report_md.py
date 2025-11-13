@@ -1,19 +1,19 @@
-from typing import Dict, Any, List
+from typing import Any
 
 
-def _fmt_list(items: List[str]) -> str:
+def _fmt_list(items: list[str]) -> str:
     if not items:
         return "-"
     return ", ".join(sorted(items))
 
 
-def render_diff_md(diff: Dict[str, Any]) -> str:
+def render_diff_md(diff: dict[str, Any]) -> str:
     meta = diff.get("meta", {})
     domain = meta.get("domain", "?")
     ts_from = meta.get("from", "?")
     ts_to = meta.get("to", "?")
 
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append(f"# Diff recondns — {domain}")
     lines.append("")
     lines.append(f"_De_ **{ts_from}** _à_ **{ts_to}**")
@@ -82,7 +82,7 @@ def render_diff_md(diff: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_diff_html(diff: Dict[str, Any]) -> str:
+def render_diff_html(diff: dict[str, Any]) -> str:
     """Version HTML autonome (un seul fichier)."""
     meta = diff.get("meta", {})
     domain = meta.get("domain", "?")
@@ -95,14 +95,9 @@ def render_diff_html(diff: Dict[str, Any]) -> str:
     takeover = diff.get("takeover") or {}
 
     def esc(s: Any) -> str:
-        return (
-            str(s)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-    html_parts: List[str] = []
+    html_parts: list[str] = []
     html_parts.append(
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         f"<title>recondns diff — {esc(domain)}</title>"
@@ -120,9 +115,7 @@ def render_diff_html(diff: Dict[str, Any]) -> str:
     )
 
     html_parts.append(f"<h1>Diff recondns — {esc(domain)}</h1>")
-    html_parts.append(
-        f"<p>De <strong>{esc(ts_from)}</strong> à <strong>{esc(ts_to)}</strong></p>"
-    )
+    html_parts.append(f"<p>De <strong>{esc(ts_from)}</strong> à <strong>{esc(ts_to)}</strong></p>")
 
     # DNS
     if dns:
@@ -133,9 +126,7 @@ def render_diff_html(diff: Dict[str, Any]) -> str:
         for rtype, changes in dns.items():
             added = ", ".join(esc(v) for v in (changes.get("added") or [])) or "-"
             removed = ", ".join(esc(v) for v in (changes.get("removed") or [])) or "-"
-            html_parts.append(
-                f"<tr><td>{esc(rtype)}</td><td>{added}</td><td>{removed}</td></tr>"
-            )
+            html_parts.append(f"<tr><td>{esc(rtype)}</td><td>{added}</td><td>{removed}</td></tr>")
         html_parts.append("</tbody></table>")
 
     # CRT subdomains
@@ -177,9 +168,7 @@ def render_diff_html(diff: Dict[str, Any]) -> str:
             for t in removed:
                 host = esc(t.get("host"))
                 provider = esc(t.get("provider"))
-                html_parts.append(
-                    f"<li><code>{host}</code> (anciennement {provider})</li>"
-                )
+                html_parts.append(f"<li><code>{host}</code> (anciennement {provider})</li>")
             html_parts.append("</ul>")
 
     if not dns and not crt and not takeover:

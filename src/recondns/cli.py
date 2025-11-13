@@ -1,82 +1,121 @@
 # --- CLI / logging
 import logging
-import sys
 from pathlib import Path
+
 import click
 
-# --- Mode "collecte"
 from .core import snapshot_domain
-
-# --- Export JSON brut (une photo du scan)
-from .exporter import export_snapshot
-
-# --- MODE DB (SQLite)
 from .db import (
-    init_db,
-    save_snapshot as db_save_snapshot,
-    list_snapshots as db_list_snapshots,
     get_snapshot_by_id,
+    init_db,
 )
-
-from .diffing import diff_reports as db_diff_reports
+from .db import (
+    list_snapshots as db_list_snapshots,
+)
+from .db import (
+    save_snapshot as db_save_snapshot,
+)
+from .diffs import diff_reports, diff_to_html
+from .exporter import export_snapshot
+from .report_md import render_diff_md
+from .storage import (
+    list_snapshots as fs_list_snapshots,
+)
+from .storage import (
+    load_snapshot as fs_load_snapshot,
+)
 
 # --- MODE FICHIERS (snapshots JSON)
 from .storage import (
     save_snapshot as fs_save_snapshot,
-    latest_snapshot as fs_latest_snapshot,
-    list_snapshots as fs_list_snapshots,
-    load_snapshot as fs_load_snapshot,
 )
 
-from .diffs import diff_reports
-from .report_md import render_diff_md as fs_render_diff_md
-from .diffs import diff_snapshots, diff_reports, diff_to_html
-from .report_md import render_diff_md, render_diff_html
-from pathlib import Path
-import sys
-import json
+
+@click.group(invoke_without_command=True)
+@click.pass_context
+def main(ctx):
+    """
+    recondns – reconnaissance DNS + console interactive
+    """
+    if ctx.invoked_subcommand is None:
+        from .interactive import start_console
+
+        start_console()
 
 
-@click.group()
-def main():
-    """recondns — petit outil DNS + crt.sh (snapshot)"""
-    pass
+@main.command()
+def console():
+    """
+    Lance la console interactive RECONDNS.
+    """
+    from .interactive import start_console
+
+    start_console()
+
 
 # ---------- SNAPSHOT ----------
 @main.command()
 @click.argument("domain")
-@click.option("--out", "-o", default=None,
-              help="Fichier de sortie JSON (si non précisé auto gen)")
-@click.option("--no-crt", is_flag=True, default=False,
-              help="Désactive l'appel vers crt.sh (rapide & safe)")
-@click.option("--resolver", "-r", default=None,
-              help="IP d'un résolveur DNS (ex: 1.1.1.1)")
-@click.option("--timeout", default=2.0, type=float,
-              help="Timeout DNS en secondes")
-@click.option("--retries", default=1, type=int,
-              help="Nombre de retries DNS")
-@click.option("--resolve-limit", default=None, type=int,
-              help="Limite le nb de sous-domaines à résoudre (ex: 50)")
-@click.option("--check-takeover", is_flag=True, default=False,
-              help="Active la détection de Subdomain Takeover (lecture seule)")
-@click.option("--signatures", default=None,
-              help="Chemin vers un YAML de signatures (override par défaut)")
-@click.option("--takeover-workers", default=8, type=int,
-              help="Nombre de threads pour checks takeover (default 8)")
-@click.option("--takeover-delay", default=0.2, type=float,
-              help="Délai entre checks takeover (sec)")
-@click.option("--takeover-verbose", is_flag=True, default=False,
-              help="Mode verbeux pour takeover (logs)")
-@click.option("--wordlist", default=None,
-              help="Wordlist pour bruteforce de sous-domaines")
-@click.option("--bruteforce-depth", default=1, type=int,
-              help="Profondeur de bruteforce (par défaut 1)")
-@click.option("--db", default=None,
-              help="Chemin SQLite pour enregistrer l'historique (ex: data/recondns.sqlite)")
-def snapshot(domain, out, no_crt, resolver, timeout, retries, resolve_limit,
-             check_takeover, signatures, takeover_workers, takeover_delay,
-             takeover_verbose, wordlist, bruteforce_depth, db):
-    """Prend un snapshot DNS + passif + bruteforce pour DOMAIN et l'exporte en JSON (et DB si --db)."""
+@click.option("--out", "-o", default=None, help="Fichier de sortie JSON (si non précisé auto gen)")
+@click.option(
+    "--no-crt", is_flag=True, default=False, help="Désactive l'appel vers crt.sh (rapide & safe)"
+)
+@click.option("--resolver", "-r", default=None, help="IP d'un résolveur DNS (ex: 1.1.1.1)")
+@click.option("--timeout", default=2.0, type=float, help="Timeout DNS en secondes")
+@click.option("--retries", default=1, type=int, help="Nombre de retries DNS")
+@click.option(
+    "--resolve-limit",
+    default=None,
+    type=int,
+    help="Limite le nb de sous-domaines à résoudre (ex: 50)",
+)
+@click.option(
+    "--check-takeover",
+    is_flag=True,
+    default=False,
+    help="Active la détection de Subdomain Takeover (lecture seule)",
+)
+@click.option(
+    "--signatures", default=None, help="Chemin vers un YAML de signatures (override par défaut)"
+)
+@click.option(
+    "--takeover-workers",
+    default=8,
+    type=int,
+    help="Nombre de threads pour checks takeover (default 8)",
+)
+@click.option("--takeover-delay", default=0.2, type=float, help="Délai entre checks takeover (sec)")
+@click.option(
+    "--takeover-verbose", is_flag=True, default=False, help="Mode verbeux pour takeover (logs)"
+)
+@click.option("--wordlist", default=None, help="Wordlist pour bruteforce de sous-domaines")
+@click.option(
+    "--bruteforce-depth", default=1, type=int, help="Profondeur de bruteforce (par défaut 1)"
+)
+@click.option(
+    "--db",
+    default=None,
+    help="Chemin SQLite pour enregistrer l'historique (ex: data/recondns.sqlite)",
+)
+def snapshot(
+    domain,
+    out,
+    no_crt,
+    resolver,
+    timeout,
+    retries,
+    resolve_limit,
+    check_takeover,
+    signatures,
+    takeover_workers,
+    takeover_delay,
+    takeover_verbose,
+    wordlist,
+    bruteforce_depth,
+    db,
+):
+    """Prend un snapshot DNS + passif + bruteforce pour DOMAIN
+    et l'exporte en JSON (et DB si --db)."""
     if takeover_verbose:
         logging.getLogger("recondns").setLevel(logging.DEBUG)
 
@@ -84,18 +123,18 @@ def snapshot(domain, out, no_crt, resolver, timeout, retries, resolve_limit,
 
     report = snapshot_domain(
         domain,
-        use_crt=(not no_crt),
-        resolver_ips=[resolver] if resolver else None,
-        timeout=timeout,
-        retries=retries,
+        use_crt=True,
+        resolver_ips=None,  # résolveur système
+        timeout=2.0,
+        retries=1,
         resolve_limit=resolve_limit,
         check_takeover=check_takeover,
-        signatures_path=signatures,
-        takeover_max_workers=takeover_workers,
-        takeover_delay=takeover_delay,
-        takeover_verbose=takeover_verbose,
-        wordlist=wordlist,
-        bruteforce_depth=bruteforce_depth,
+        signatures_path=None,
+        takeover_max_workers=8,
+        takeover_delay=0.2,
+        takeover_verbose=False,
+        wordlist=None,
+        bruteforce_depth=1,
     )
 
     outfile = export_snapshot(report, out)
@@ -103,48 +142,81 @@ def snapshot(domain, out, no_crt, resolver, timeout, retries, resolve_limit,
 
     if db:
         init_db(db)
-        snap_id = save_snapshot(db, report)
+        snap_id = db_save_snapshot(db, report)
         click.echo(f"[+] Snapshot sauvegardé en DB ({db}) avec id={snap_id}")
-
-
 
 
 # ---------- INFO ----------
 @main.command()
 @click.argument("domain")
-@click.option("--no-crt", is_flag=True, default=False,
-              help="Désactive l'appel vers crt.sh (rapide & safe)")
-@click.option("--resolver", "-r", default=None,
-              help="IP d'un résolveur DNS (ex: 1.1.1.1)")
-@click.option("--timeout", default=2.0, type=float,
-              help="Timeout DNS en secondes")
-@click.option("--retries", default=1, type=int,
-              help="Nombre de retries DNS")
-@click.option("--resolve-limit", default=None, type=int,
-              help="Limite le nb de sous-domaines à résoudre (ex: 50)")
-@click.option("--check-takeover", is_flag=True, default=False,
-              help="Active la détection de Subdomain Takeover (lecture seule)")
-@click.option("--signatures", default=None,
-              help="Chemin vers un YAML de signatures (override par défaut)")
-@click.option("--takeover-workers", default=8, type=int,
-              help="Nombre de threads pour checks takeover (default 8)")
-@click.option("--takeover-delay", default=0.2, type=float,
-              help="Délai entre checks takeover (sec)")
-@click.option("--takeover-verbose", is_flag=True, default=False,
-              help="Mode verbeux pour takeover (logs)")
-@click.option("--wordlist", default=None,
-              help="Wordlist pour bruteforce de sous-domaines")
-@click.option("--bruteforce-depth", default=1, type=int,
-              help="Profondeur de bruteforce (par défaut 1)")
+@click.option(
+    "--no-crt", is_flag=True, default=False, help="Désactive l'appel vers crt.sh (rapide & safe)"
+)
+@click.option("--resolver", "-r", default=None, help="IP d'un résolveur DNS (ex: 1.1.1.1)")
+@click.option("--timeout", default=2.0, type=float, help="Timeout DNS en secondes")
+@click.option("--retries", default=1, type=int, help="Nombre de retries DNS")
+@click.option(
+    "--resolve-limit",
+    default=None,
+    type=int,
+    help="Limite le nb de sous-domaines à résoudre (ex: 50)",
+)
+@click.option(
+    "--check-takeover",
+    is_flag=True,
+    default=False,
+    help="Active la détection de Subdomain Takeover (lecture seule)",
+)
+@click.option(
+    "--signatures", default=None, help="Chemin vers un YAML de signatures (override par défaut)"
+)
+@click.option(
+    "--takeover-workers",
+    default=8,
+    type=int,
+    help="Nombre de threads pour checks takeover (default 8)",
+)
+@click.option("--takeover-delay", default=0.2, type=float, help="Délai entre checks takeover (sec)")
+@click.option(
+    "--takeover-verbose", is_flag=True, default=False, help="Mode verbeux pour takeover (logs)"
+)
+@click.option("--wordlist", default=None, help="Wordlist pour bruteforce de sous-domaines")
+@click.option(
+    "--bruteforce-depth", default=1, type=int, help="Profondeur de bruteforce (par défaut 1)"
+)
 @click.option("--out", "outfile", help="Sauvegarde le rapport JSON dans un fichier")
-
-def info(domain, no_crt, resolver, timeout, retries, resolve_limit,
-         check_takeover, signatures, takeover_workers, takeover_delay,
-         takeover_verbose, wordlist, bruteforce_depth,outfile):
+@click.option(
+    "--provider-filter",
+    multiple=True,
+    help=(
+        "Filtre les résultats takeover par provider "
+        "(ex: --provider-filter heroku --provider-filter s3)"
+    ),
+)
+def info(
+    domain,
+    no_crt,
+    resolver,
+    timeout,
+    retries,
+    resolve_limit,
+    check_takeover,
+    signatures,
+    takeover_workers,
+    takeover_delay,
+    takeover_verbose,
+    wordlist,
+    bruteforce_depth,
+    outfile,
+    provider_filter,
+):
     """Affiche un résumé en console (A / NS / MX counts + découverte passive/bruteforce)."""
+
+    # logs takeover verbeux
     if takeover_verbose:
         logging.getLogger("recondns").setLevel(logging.DEBUG)
 
+    # ⚠️ ON CRÉE D'ABORD LE REPORT ICI
     report = snapshot_domain(
         domain,
         use_crt=(not no_crt),
@@ -161,20 +233,32 @@ def info(domain, no_crt, resolver, timeout, retries, resolve_limit,
         bruteforce_depth=bruteforce_depth,
     )
 
+    # ---- Résumé DNS ----
     dns = report.get("dns", {})
     click.echo(f"Domain: {domain}")
     for k in ["A", "AAAA", "NS", "MX", "TXT", "CNAME"]:
         click.echo(f" {k}: {len(dns.get(k, []))} entrées")
     click.echo(f"crt.sh sous-domaines trouvés: {len(report.get('crt_subdomains', []))}")
-    if report.get("takeover_checks"):
+
+    # ---- Takeover ----
+    takeovers = report.get("takeover_checks") or []
+
+    # Filtre éventuel par provider
+    if provider_filter:
+        wanted = {p.lower().strip() for p in provider_filter}
+        takeovers = [t for t in takeovers if (t.get("provider") or "").lower() in wanted]
+
+    if takeovers:
         click.echo("Possible takeover findings:")
-        for t in report.get("takeover_checks"):
-            click.echo(f" - {t.get('host')} -> {t.get('provider')} ({t.get('method')}) [{t.get('scheme')} {t.get('status')}]")
-    else:
-        if check_takeover:
-            click.echo("No takeover signatures found (checked).")
+        for t in takeovers:
+            click.echo(
+                f" - {t.get('host')} -> {t.get('provider')} "
+                f"({t.get('method')}) [{t.get('scheme')} {t.get('status')}]"
+            )
+    elif check_takeover:
+        click.echo("No takeover signatures found (ou filtrées par provider).")
 
-
+    # ---- Enrichissement IP ----
     ip_enrich = report.get("ip_enrichment") or {}
     if ip_enrich:
         click.echo("\nIP enrichment (ASN / Country / Cloud):")
@@ -188,7 +272,8 @@ def info(domain, no_crt, resolver, timeout, retries, resolve_limit,
             else:
                 click.echo(f" {ip}  {country}  {asn}  {org}")
 
-        mail_sec = report.get("mail_security") or {}
+    # ---- Mail security ----
+    mail_sec = report.get("mail_security") or {}
     if mail_sec:
         click.echo("\nMail security (MX / SPF / DMARC / DKIM hint):")
         mx_hosts = mail_sec.get("mx_hosts") or []
@@ -203,23 +288,18 @@ def info(domain, no_crt, resolver, timeout, retries, resolve_limit,
 
         click.echo(f" SPF:   {'OK' if has_spf else '❌ absent'}")
         click.echo(f" DMARC: {'OK' if has_dmarc else '❌ absent'}")
-        # DKIM = juste un hint, on le précise
         if has_dkim:
             click.echo(" DKIM: hint présent dans les TXT (à confirmer)")
         else:
             click.echo(" DKIM: aucun hint détecté (peut quand même être configuré)")
 
-
-
+    # ---- Export JSON optionnel ----
     if outfile:
-       import json
-       with open(outfile, "w", encoding="utf-8") as f:
-           json.dump(report, f, indent=2)
-       click.echo(f"JSON écrit dans {outfile}")
-    return
+        import json
 
-
-
+        with open(outfile, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        click.echo(f"JSON écrit dans {outfile}")
 
 
 # ---------- HISTORY ----------
@@ -227,10 +307,12 @@ def info(domain, no_crt, resolver, timeout, retries, resolve_limit,
 @click.argument("domain")
 @click.option("--db", required=True, help="Chemin SQLite (ex: data/recondns.sqlite)")
 @click.option("--limit", default=20, type=int, help="Nombre de snapshots à lister")
-@click.option("--md", "as_md", is_flag=True, default=False,
-              help="Affiche/exports l'historique en Markdown")
-@click.option("--out", "out_md", default=None,
-              help="Chemin d'un fichier .md pour écrire le résultat")
+@click.option(
+    "--md", "as_md", is_flag=True, default=False, help="Affiche/exports l'historique en Markdown"
+)
+@click.option(
+    "--out", "out_md", default=None, help="Chemin d'un fichier .md pour écrire le résultat"
+)
 def history(domain, db, limit, as_md, out_md):
     """Liste les snapshots d'un DOMAIN sauvegardés dans la DB."""
     init_db(db)
@@ -275,7 +357,9 @@ def history(domain, db, limit, as_md, out_md):
 @click.option("--db", required=True, help="Chemin SQLite (ex: data/recondns.sqlite)")
 @click.option("--from", "from_id", required=True, type=int, help="ID snapshot source")
 @click.option("--to", "to_id", required=True, type=int, help="ID snapshot cible")
-@click.option("--html", "html_path", default=None, help="Écrit aussi un rapport HTML complet dans ce fichier")
+@click.option(
+    "--html", "html_path", default=None, help="Écrit aussi un rapport HTML complet dans ce fichier"
+)
 def diff(domain, db, from_id, to_id, html_path):
     """Affiche les différences entre deux snapshots (IDs)."""
     init_db(db)
@@ -305,9 +389,9 @@ def diff(domain, db, from_id, to_id, html_path):
         ad = d["crt_subdomains"].get("added") or []
         rm = d["crt_subdomains"].get("removed") or []
         if ad:
-            click.echo(f" added:   {ad[:50]}{' ...' if len(ad)>50 else ''}")
+            click.echo(f" added:   {ad[:50]}{' ...' if len(ad) > 50 else ''}")
         if rm:
-            click.echo(f" removed: {rm[:50]}{' ...' if len(rm)>50 else ''}")
+            click.echo(f" removed: {rm[:50]}{' ...' if len(rm) > 50 else ''}")
     # Takeover
     if d["takeover"]:
         click.echo("\n[Takeover]")
@@ -331,7 +415,6 @@ def diff(domain, db, from_id, to_id, html_path):
             click.echo(f"[!] Impossible d'écrire le rapport HTML : {e}")
 
 
-
 # ---------- TRACK (fichiers) ----------
 @main.command("track")
 @click.argument("domain")
@@ -346,16 +429,22 @@ def cmd_track(domain, resolve_limit, check_takeover, label):
     report = snapshot_domain(
         domain,
         use_crt=True,
-        resolver_ip=None,
+        resolver_ips=None,  # résolveur système
+        timeout=2.0,
+        retries=1,
         resolve_limit=resolve_limit,
         check_takeover=check_takeover,
         signatures_path=None,
         takeover_max_workers=8,
         takeover_delay=0.2,
         takeover_verbose=False,
+        wordlist=None,
+        bruteforce_depth=1,
     )
+
     path = fs_save_snapshot(domain, report, label=label)
     click.echo(f"[ok] snapshot -> {path}")
+
 
 # ---------- TIMELINE (fichiers) ----------
 @main.command("timeline")
@@ -371,10 +460,13 @@ def cmd_timeline(domain):
     for p in snaps:
         click.echo(p.name)
 
+
 # ---------- DIFF-JSON (fichiers) ----------
 @main.command("diff-json")
 @click.argument("domain")
-@click.option("--from", "from_path", default=None, help="Chemin snapshot (ancien). Par défaut: avant-dernier")
+@click.option(
+    "--from", "from_path", default=None, help="Chemin snapshot (ancien). Par défaut: avant-dernier"
+)
 @click.option("--to", "to_path", default=None, help="Chemin snapshot (récent). Par défaut: dernier")
 @click.option("--md", is_flag=True, default=False, help="Sortie Markdown")
 def cmd_diff_json(domain, from_path, to_path, md):
@@ -386,31 +478,32 @@ def cmd_diff_json(domain, from_path, to_path, md):
         click.echo("Pas assez de snapshots. Utilise `recondns track <domain>` deux fois.")
         return
 
-    def pick(path_or_idx):
+    def pick_path(path_or_idx: str | None) -> Path | None:
         if path_or_idx and Path(path_or_idx).exists():
             return Path(path_or_idx)
         return None
 
-    A = pick(from_path)
-    B = pick(to_path)
+    from_snap = pick_path(from_path)
+    to_snap = pick_path(to_path)
 
     # par défaut: avant-dernier vs dernier
-    if not A or not B:
+    if not from_snap or not to_snap:
         snaps_sorted = sorted(snaps)
-        A = A or snaps_sorted[-2]
-        B = B or snaps_sorted[-1]
+        # tu peux éventuellement ajouter une sécurité si len(snaps_sorted) < 2
+        from_snap = from_snap or snaps_sorted[-2]
+        to_snap = to_snap or snaps_sorted[-1]
 
-    old = fs_load_snapshot(A)
-    new = fs_load_snapshot(B)
-    diff = fs_diff_snapshots(old, new)
+    old = fs_load_snapshot(from_snap)
+    new = fs_load_snapshot(to_snap)
+    diff = diff_reports(old, new)
 
     if md:
-        click.echo(fs_render_diff_md(diff))
+        click.echo(render_diff_md(diff))
     else:
         # court résumé lisible
         add_n = len(diff.get("added", []))
-        rm_n  = len(diff.get("removed", []))
-        tk_n  = len(diff.get("takeover_changes", []))
+        rm_n = len(diff.get("removed", []))
+        tk_n = len(diff.get("takeover_changes", []))
         click.echo(f"Diff {domain}: +{add_n} / -{rm_n} / takeoverΔ={tk_n}")
         if add_n:
             click.echo(f"  added (ex): {diff['added'][:5]}")

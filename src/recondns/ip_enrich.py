@@ -1,6 +1,6 @@
 # src/recondns/ip_enrich.py
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 import requests
 
@@ -9,7 +9,7 @@ logger = logging.getLogger("recondns")
 IPAPI_URL = "http://ip-api.com/json/{ip}?fields=status,message,country,countryCode,as,org,isp,query"
 
 
-def _detect_cloud(asn: str, org: str, isp: str) -> Optional[str]:
+def _detect_cloud(asn: str, org: str, isp: str) -> str | None:
     """
     Devine vaguement le cloud provider à partir de l'ASN / org / ISP.
     C'est heuristique, mais suffisant pour un rapport de recon.
@@ -33,7 +33,7 @@ def _detect_cloud(asn: str, org: str, isp: str) -> Optional[str]:
     return None
 
 
-def enrich_ip(ip: str, timeout: float = 5.0) -> Optional[Dict[str, Any]]:
+def enrich_ip(ip: str, timeout: float = 5.0) -> dict[str, Any] | None:
     """
     Interroge ip-api.com pour récupérer ASN / org / pays / etc.
     Retourne un petit dict prêt à être mis dans le rapport, ou None si échec.
@@ -65,11 +65,11 @@ def enrich_ip(ip: str, timeout: float = 5.0) -> Optional[Dict[str, Any]]:
         return None
 
 
-def enrich_many(ips: List[str], timeout: float = 5.0) -> Dict[str, Dict[str, Any]]:
+def enrich_many(ips: list[str], timeout: float = 5.0) -> dict[str, dict[str, Any]]:
     """
     Enrichit une liste d'IPs (sans doublons) et retourne un dict {ip: info}.
     """
-    out: Dict[str, Dict[str, Any]] = {}
+    out: dict[str, dict[str, Any]] = {}
     seen = set()
 
     for ip in ips:
