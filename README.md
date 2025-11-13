@@ -1,9 +1,9 @@
 # Recondns by guepster
 
-_Avertissement légal
+Avertissement légal
 
 N’utilise cet outil que sur des domaines pour lesquels tu disposes d’une autorisation explicite, ou dans un cadre strictement éducatif/légal.
-Toute utilisation abusive est sous la responsabilité de l’utilisateur._
+Toute utilisation abusive est sous la responsabilité de l’utilisateur.
 
 **Outil CLI de reconnaissance DNS avancée**, orienté :
 
@@ -19,12 +19,12 @@ recondns = un mini “amass-lite” focalisé sur la surveillance DNS et la dét
 ---
 
 # Résumé rapide : info
-_Ce que ça affiche :
+Ce que ça affiche :
 - Compteurs DNS (A / AAAA / NS / MX / TXT / CNAME)
 - Nombre de sous-domaines trouvés (crt.sh + passif + bruteforce)
 - Éventuels findings de subdomain takeover
 - IP enrichment : ASN, pays, cloud (AWS / GCP / Azure /…)
-- Mail security : MX, SPF, DMARC, DKIM (hint)_
+- Mail security : MX, SPF, DMARC, DKIM (hint)
 
 Options utiles :
 
@@ -46,13 +46,13 @@ recondns info example.com --check-takeover --provider-filter aws
 ---
 
 # Snapshot complet : snapshot
-_Contenu du JSON :
+Contenu du JSON :
   - dns : enregistrements A/AAAA/NS/MX/TXT/CNAME
   - crt_subdomains : sous-domaines trouvés (passif + bruteforce)
   - crt_subdomains_resolved : sous-domaines résolus en A
   - takeover_checks : résultats des checks takeover
   - ip_enrichment : infos ASN / pays / cloud pour chaque IP
-  - mail_security : MX / SPF / DMARC / DKIM (hint)_
+  - mail_security : MX / SPF / DMARC / DKIM (hint)
 
 ## Snapshot simple en JSON
 recondns snapshot example.com
@@ -76,10 +76,10 @@ recondns history example.com --db data/recondns.sqlite --md --out history.md
 ---
 
 # Diff (commande)
-_Le diff montre :
+Le diff montre :
   - Diff DNS (ajouts / retraits par type)
   - Sous-domaines ajoutés / retirés
-  - Changement sur les findings takeover_
+  - Changement sur les findings takeover
 
 ## Diff console
 recondns diff example.com --db data/recondns.sqlite --from 3 --to 7
