@@ -1,10 +1,35 @@
-#test github repo
-import click
-from .core import snapshot_domain
-from .exporter import export_snapshot
-from .db import init_db, save_snapshot, list_snapshots, get_snapshot_by_id
-from .diffing import diff_reports
+# --- CLI / logging
 import logging
+import sys
+from pathlib import Path
+import click
+
+# --- Mode "collecte"
+from .core import snapshot_domain
+
+# --- Export JSON brut (une photo du scan)
+from .exporter import export_snapshot
+
+# --- MODE DB (SQLite)
+from .db import (
+    init_db,
+    save_snapshot as db_save_snapshot,
+    list_snapshots as db_list_snapshots,
+    get_snapshot_by_id,
+)
+
+from .diffing import diff_reports as db_diff_reports
+
+# --- MODE FICHIERS (snapshots JSON)
+from .storage import (
+    save_snapshot as fs_save_snapshot,
+    latest_snapshot as fs_latest_snapshot,
+    list_snapshots as fs_list_snapshots,
+    load_snapshot as fs_load_snapshot,
+)
+
+from .diffs import diff_snapshots as fs_diff_snapshots
+from .report_md import render_diff_md as fs_render_diff_md
 
 @click.group()
 def main():
@@ -44,7 +69,7 @@ def snapshot(domain, out, no_crt, resolver, resolve_limit, check_takeover, signa
 
     if db:
         init_db(db)
-        snap_id = save_snapshot(db, report)
+        snap_id = db_save_snapshot(db, report)
         click.echo(f"[+] Snapshot sauvegardé en DB ({db}) avec id={snap_id}")
 
 # ---------- INFO ----------
@@ -93,7 +118,7 @@ def info(domain, no_crt, resolver, resolve_limit, check_takeover, signatures,
 def history(domain, db, limit):
     """Liste les snapshots d'un DOMAIN sauvegardés dans la DB."""
     init_db(db)
-    rows = list_snapshots(db, domain, limit)
+    rows = db_list_snapshots(db, domain, limit)
     if not rows:
         click.echo("Aucun snapshot trouvé.")
         return
@@ -118,7 +143,7 @@ def diff(domain, db, from_id, to_id):
     if a.get("domain") != domain or b.get("domain") != domain:
         click.echo("Les snapshots ne correspondent pas au domaine demandé.")
         return
-    d = diff_reports(a, b)
+    d = db_diff_reports(a, b)
 
     click.echo(f"Diff {domain}  {d['meta']['from']}  →  {d['meta']['to']}")
     # DNS
@@ -149,3 +174,89 @@ def diff(domain, db, from_id, to_id):
             click.echo(f" removed: {rm}")
     if not d["dns"] and not d["crt_subdomains"] and not d["takeover"]:
         click.echo("Aucun changement détecté.")
+# ---------- TRACK (fichiers) ----------
+@main.command("track")
+@click.argument("domain")
+@click.option("--resolve-limit", default=50, type=int)
+@click.option("--check-takeover", is_flag=True, default=False)
+@click.option("--label", default=None, help="suffixe du nom du fichier")
+def cmd_track(domain, resolve_limit, check_takeover, label):
+    """
+    Scan + enregistre un snapshot JSON local: data/<domain>/YYYYmmdd_HHMMSS[_label].json
+    """
+    click.echo(f"[track] scan {domain} ...")
+    report = snapshot_domain(
+        domain,
+        use_crt=True,
+        resolver_ip=None,
+        resolve_limit=resolve_limit,
+        check_takeover=check_takeover,
+        signatures_path=None,
+        takeover_max_workers=8,
+        takeover_delay=0.2,
+        takeover_verbose=False,
+    )
+    path = fs_save_snapshot(domain, report, label=label)
+    click.echo(f"[ok] snapshot -> {path}")
+
+# ---------- TIMELINE (fichiers) ----------
+@main.command("timeline")
+@click.argument("domain")
+def cmd_timeline(domain):
+    """
+    Liste les snapshots JSON locaux pour un domaine.
+    """
+    snaps = fs_list_snapshots(domain)
+    if not snaps:
+        click.echo("Aucun snapshot.")
+        return
+    for p in snaps:
+        click.echo(p.name)
+
+# ---------- DIFF-JSON (fichiers) ----------
+@main.command("diff-json")
+@click.argument("domain")
+@click.option("--from", "from_path", default=None, help="Chemin snapshot (ancien). Par défaut: avant-dernier")
+@click.option("--to", "to_path", default=None, help="Chemin snapshot (récent). Par défaut: dernier")
+@click.option("--md", is_flag=True, default=False, help="Sortie Markdown")
+def cmd_diff_json(domain, from_path, to_path, md):
+    """
+    Diff entre 2 snapshots JSON (mode fichiers). Si --from/--to vides: compare N-1 vs N.
+    """
+    snaps = fs_list_snapshots(domain)
+    if len(snaps) < 2 and (not from_path or not to_path):
+        click.echo("Pas assez de snapshots. Utilise `recondns track <domain>` deux fois.")
+        return
+
+    def pick(path_or_idx):
+        if path_or_idx and Path(path_or_idx).exists():
+            return Path(path_or_idx)
+        return None
+
+    A = pick(from_path)
+    B = pick(to_path)
+
+    # par défaut: avant-dernier vs dernier
+    if not A or not B:
+        snaps_sorted = sorted(snaps)
+        A = A or snaps_sorted[-2]
+        B = B or snaps_sorted[-1]
+
+    old = fs_load_snapshot(A)
+    new = fs_load_snapshot(B)
+    diff = fs_diff_snapshots(old, new)
+
+    if md:
+        click.echo(fs_render_diff_md(diff))
+    else:
+        # court résumé lisible
+        add_n = len(diff.get("added", []))
+        rm_n  = len(diff.get("removed", []))
+        tk_n  = len(diff.get("takeover_changes", []))
+        click.echo(f"Diff {domain}: +{add_n} / -{rm_n} / takeoverΔ={tk_n}")
+        if add_n:
+            click.echo(f"  added (ex): {diff['added'][:5]}")
+        if rm_n:
+            click.echo(f"  removed (ex): {diff['removed'][:5]}")
+        if tk_n:
+            click.echo(f"  takeover changes (ex): {diff['takeover_changes'][:2]}")
