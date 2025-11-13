@@ -20,6 +20,7 @@ recondns = un mini “amass-lite” focalisé sur la surveillance DNS et la dét
 
 # Résumé rapide : info
 _Ce que ça affiche :_
+
 _- Compteurs DNS (A / AAAA / NS / MX / TXT / CNAME)_
 _- Nombre de sous-domaines trouvés (crt.sh + passif + bruteforce)_
 _- Éventuels findings de subdomain takeover_
