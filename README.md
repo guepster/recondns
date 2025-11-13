@@ -24,7 +24,7 @@ recondns info example.com --wordlist wordlists/common.txt
 ## Avec détection de takeover filtrée sur un provider
 recondns info example.com --check-takeover --provider-filter aws
 
-/n
+---
 
 # Snapshot (commande)
 
@@ -36,6 +36,16 @@ recondns snapshot example.com -o data/example_snapshot.json
 
 ## Snapshot + historique SQLite
 recondns snapshot example.com --db data/recondns.sqlite
+
+---
+
+# Diff
+
+## Diff console
+recondns diff example.com --db data/recondns.sqlite --from 3 --to 7
+
+## Diff + rapport HTML complet
+recondns diff example.com --db data/recondns.sqlite --from 3 --to 7 --html diff_3_7.html
 
 ---
 
