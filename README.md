@@ -39,7 +39,7 @@ recondns snapshot example.com --db data/recondns.sqlite
 
 ---
 
-# Diff
+# Diff (commande)
 
 ## Diff console
 recondns diff example.com --db data/recondns.sqlite --from 3 --to 7
