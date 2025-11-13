@@ -102,6 +102,9 @@ Les snapshots JSON sont stockés dans : data/<domaine>/YYYYmmdd_HHMMSS[_{label}]
 ## Diff entre deux snapshots JSON (N-1 vs N par défaut) en Markdown
 ```recondns diff-json example.com --md```
 
+---
+
+Pour en savoir plus > ```recondns --help```
 
 ---
 
