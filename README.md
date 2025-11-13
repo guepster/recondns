@@ -79,7 +79,7 @@ recondns diff-json example.com --md
 python -m venv .venv
 source .venv/bin/activate   # Windows : .venv\Scripts\activate
 pip install -r requirements.txt
-pip install -e .
+pip install -e .```
 
 ---
 
