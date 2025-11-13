@@ -1,32 +1,22 @@
-# recondns-cli
+# Recondns by guepster
 
-Mini outil CLI pour la reconnaissance passive DNS + agrégation crt.sh — snapshot JSON.
+**Outil CLI de reconnaissance DNS avancée**, orienté :
 
-## Installation rapide
+- 🌐 Enumeration passive (crt.sh, CertSpotter, BufferOver)
+- 🔍 Bruteforce léger de sous-domaines
+- 🛡️ Détection de subdomain takeover
+- 🛰️ Enrichissement IP (ASN, pays, fournisseur Cloud)
+- 🗄️ Snapshots versionnés (SQLite)
+- 📊 Diff entre snapshots + rapport HTML
+
+recondns = un mini “amass-lite” focalisé sur la surveillance DNS et la détection de changements.
+
+---
+
+# 🚀 Installation
+
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows : .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
-```
-
-## Usage
-```bash
-# snapshot et écriture auto
-recondns snapshot example.com
-
-# snapshot vers fichier précis
-recondns snapshot example.com -o /tmp/example_snapshot.json
-
-# résumé rapide
-recondns info example.com
-```
-
-## Roadmap (features prochaines)
-- Subdomain takeover checks
-- Timeline / historique (snapshots dans SQLite)
-- Risk scoring & prioritization
-- Export STIX / integration SIEM
-
-## Avertissement légal
-Utiliser cet outil uniquement sur des domaines dont vous avez l'autorisation ou à des fins éducatives/legales. Toute utilisation abusive est de la responsabilité de l'utilisateur.
