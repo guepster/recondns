@@ -19,12 +19,12 @@ recondns = un mini “amass-lite” focalisé sur la surveillance DNS et la dét
 ---
 
 # Résumé rapide : info
-Ce que ça affiche :
+_Ce que ça affiche :
 - Compteurs DNS (A / AAAA / NS / MX / TXT / CNAME)
 - Nombre de sous-domaines trouvés (crt.sh + passif + bruteforce)
 - Éventuels findings de subdomain takeover
 - IP enrichment : ASN, pays, cloud (AWS / GCP / Azure /…)
-- Mail security : MX, SPF, DMARC, DKIM (hint)
+- Mail security : MX, SPF, DMARC, DKIM (hint)_
 
 Options utiles :
 
