@@ -1,9 +1,9 @@
 # Recondns by guepster
 
-Avertissement légal
+/!\ _Avertissement légal_ /!\
 
-N’utilise cet outil que sur des domaines pour lesquels tu disposes d’une autorisation explicite, ou dans un cadre strictement éducatif/légal.
-Toute utilisation abusive est sous la responsabilité de l’utilisateur.
+_N’utilise cet outil que sur des domaines pour lesquels tu disposes d’une autorisation explicite, ou dans un cadre strictement éducatif/légal.
+Toute utilisation abusive est sous la responsabilité de l’utilisateur._
 
 **Outil CLI de reconnaissance DNS avancée**, orienté :
 
@@ -19,20 +19,20 @@ recondns = un mini “amass-lite” focalisé sur la surveillance DNS et la dét
 ---
 
 # Résumé rapide : info
-Ce que ça affiche :
-- Compteurs DNS (A / AAAA / NS / MX / TXT / CNAME)
-- Nombre de sous-domaines trouvés (crt.sh + passif + bruteforce)
-- Éventuels findings de subdomain takeover
-- IP enrichment : ASN, pays, cloud (AWS / GCP / Azure /…)
-- Mail security : MX, SPF, DMARC, DKIM (hint)
+_Ce que ça affiche :_
+_- Compteurs DNS (A / AAAA / NS / MX / TXT / CNAME)_
+_- Nombre de sous-domaines trouvés (crt.sh + passif + bruteforce)_
+_- Éventuels findings de subdomain takeover_
+_- IP enrichment : ASN, pays, cloud (AWS / GCP / Azure /…)_
+_- Mail security : MX, SPF, DMARC, DKIM (hint)_
 
-Options utiles :
+_Options utiles :_
 
-- --no-crt : désactive crt.sh (plus rapide / plus discret)
-- -r, --resolver : forcer un résolveur (ex: 1.1.1.1 ou 1.1.1.1,8.8.8.8)
-- --wordlist : bruteforce léger de sous-domaines
-- --bruteforce-depth : profondeur du bruteforce (par défaut 1)
-- --check-takeover + --signatures + --provider-filter : takeover
+_- --no-crt : désactive crt.sh (plus rapide / plus discret)_
+_- -r, --resolver : forcer un résolveur (ex: 1.1.1.1 ou 1.1.1.1,8.8.8.8)_
+_- --wordlist : bruteforce léger de sous-domaines_
+_- --bruteforce-depth : profondeur du bruteforce (par défaut 1)_
+_- --check-takeover + --signatures + --provider-filter : takeover_
 
 ## Résumé DNS + passif
 recondns info example.com
@@ -46,13 +46,13 @@ recondns info example.com --check-takeover --provider-filter aws
 ---
 
 # Snapshot complet : snapshot
-Contenu du JSON :
-  - dns : enregistrements A/AAAA/NS/MX/TXT/CNAME
-  - crt_subdomains : sous-domaines trouvés (passif + bruteforce)
-  - crt_subdomains_resolved : sous-domaines résolus en A
-  - takeover_checks : résultats des checks takeover
-  - ip_enrichment : infos ASN / pays / cloud pour chaque IP
-  - mail_security : MX / SPF / DMARC / DKIM (hint)
+_Contenu du JSON :_
+  _- dns : enregistrements A/AAAA/NS/MX/TXT/CNAME_
+  _- crt_subdomains : sous-domaines trouvés (passif + bruteforce)_
+  _- crt_subdomains_resolved : sous-domaines résolus en A_
+  _- takeover_checks : résultats des checks takeover_
+  _- ip_enrichment : infos ASN / pays / cloud pour chaque IP_
+  _- mail_security : MX / SPF / DMARC / DKIM (hint)_
 
 ## Snapshot simple en JSON
 recondns snapshot example.com
@@ -76,10 +76,10 @@ recondns history example.com --db data/recondns.sqlite --md --out history.md
 ---
 
 # Diff (commande)
-Le diff montre :
-  - Diff DNS (ajouts / retraits par type)
-  - Sous-domaines ajoutés / retirés
-  - Changement sur les findings takeover
+_Le diff montre :_
+  _- Diff DNS (ajouts / retraits par type)_
+  _- Sous-domaines ajoutés / retirés_
+  _- Changement sur les findings takeover_
 
 ## Diff console
 recondns diff example.com --db data/recondns.sqlite --from 3 --to 7
