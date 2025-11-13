@@ -11,7 +11,7 @@
 
 recondns = un mini “amass-lite” focalisé sur la surveillance DNS et la détection de changements.
 
-#Info
+## Info
 
 # Résumé DNS + passif
 recondns info example.com
