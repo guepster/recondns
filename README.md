@@ -11,26 +11,26 @@
 
 recondns = un mini “amass-lite” focalisé sur la surveillance DNS et la détection de changements.
 
-## Info
+# Info
 
-# Résumé DNS + passif
+## Résumé DNS + passif
 recondns info example.com
 
-# Résumé + bruteforce avec wordlist
+## Résumé + bruteforce avec wordlist
 recondns info example.com --wordlist wordlists/common.txt
 
-# Avec détection de takeover filtrée sur un provider
+## Avec détection de takeover filtrée sur un provider
 recondns info example.com --check-takeover --provider-filter aws
 
-##Snapshot
+# Snapshot
 
-# Snapshot simple en JSON
+## Snapshot simple en JSON
 recondns snapshot example.com
 
-# Snapshot vers un fichier spécifique
+## Snapshot vers un fichier spécifique
 recondns snapshot example.com -o data/example_snapshot.json
 
-# Snapshot + historique SQLite
+## Snapshot + historique SQLite
 recondns snapshot example.com --db data/recondns.sqlite
 
 ---
