@@ -1,75 +1,178 @@
 # src/recondns/sources/passive.py
-"""
-Sources passives : certspotter, bufferover.run (BufferOver).
-Retourne un set de sous-domaines découverts.
-"""
 
-from typing import Set, Iterable
-import requests
+import os
 import logging
+from typing import Iterable, Set, Callable, Optional, List
+import requests
 
-LOG = logging.getLogger("recondns.passive")
+logger = logging.getLogger("recondns.passive")
 
-def certspotter(domain: str, limit: int = 100) -> Set[str]:
+USER_AGENT = "recondns/0.2 (+https://github.com/yourname/recondns-cli)"
+
+# ------------------ Utils ------------------
+
+
+def _normalize_name(name: str, domain: str) -> Optional[str]:
+    """Nettoie un nom : enlève les wildcards, espaces, garde seulement les sous-domaines du domain."""
+    if not isinstance(name, str):
+        return None
+    n = name.strip().lower()
+    if not n:
+        return None
+    # enlève les wildcards
+    n = n.lstrip("*.")  # *.example.com -> example.com
+    # garde seulement ce qui appartient au domaine ciblé
+    if not n.endswith(domain):
+        return None
+    return n
+
+
+def _dedupe_filter(names: Iterable[str], domain: str) -> Set[str]:
+    out: Set[str] = set()
+    for n in names:
+        nn = _normalize_name(n, domain)
+        if nn:
+            out.add(nn)
+    return out
+
+
+# ------------------ CertSpotter ------------------
+
+
+def certspotter(domain: str) -> Set[str]:
     """
-    Interroge l'API publique de CertSpotter.
-    Pas d'API key nécessaire pour requêtes basiques.
+    Récupère les sous-domaines via CertSpotter.
+
+    - Utilise l'endpoint public v1
+    - Si CERTSPOTTER_API_TOKEN est défini dans l'env, on ajoute un header Authorization.
+    - On ne gère qu'une page (suffisant pour un petit outil perso).
     """
     url = "https://api.certspotter.com/v1/issuances"
     params = {
         "domain": domain,
         "include_subdomains": "true",
         "expand": "dns_names",
-        "per_page": limit
+        "match_wildcards": "true",
     }
-    subs: Set[str] = set()
+
+    headers = {"User-Agent": USER_AGENT}
+    token = os.getenv("CERTSPOTTER_API_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     try:
-        r = requests.get(url, params=params, timeout=8)
-        r.raise_for_status()
-        for item in r.json():
-            for name in item.get("dns_names", []) or []:
-                if isinstance(name, str) and name.endswith(domain):
-                    subs.add(name.lower().rstrip("."))
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            logger.warning("CertSpotter HTTP %s for %s", resp.status_code, domain)
+            return set()
+        data = resp.json()
+        found: Set[str] = set()
+        for entry in data:
+            dns_names = entry.get("dns_names") or []
+            for name in dns_names:
+                nn = _normalize_name(name, domain)
+                if nn:
+                    found.add(nn)
+        return found
     except Exception as e:
-        LOG.debug("certspotter error for %s: %s", domain, e)
-    return subs
+        logger.warning("CertSpotter error for %s: %s", domain, e)
+        return set()
+
+
+# ------------------ BufferOver (dns.bufferover.run) ------------------
 
 
 def bufferover(domain: str) -> Set[str]:
     """
-    Interroge bufferover.run public endpoint (dns.bufferover.run).
-    Retourne un set de noms extraits des champs FDNS_A / RDNS etc.
+    Utilise dns.bufferover.run pour récupérer des sous-domaines à partir des enregistrements FDNS_A / FDNS_CNAME.
     """
-    url = f"https://dns.bufferover.run/dns?q={domain}"
-    subs: Set[str] = set()
+    url = f"https://dns.bufferover.run/dns?q=.{domain}"
+    headers = {"User-Agent": USER_AGENT}
     try:
-        r = requests.get(url, timeout=8)
-        r.raise_for_status()
-        data = r.json()
-        # FDNS_A entries format: "ip,sub.domain" ou list similaire
-        for key in ("FDNS_A", "RDNS", "FDNS_CNAME"):
-            for entry in data.get(key, []) or []:
-                if not isinstance(entry, str):
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            logger.warning("BufferOver HTTP %s for %s", resp.status_code, domain)
+            return set()
+        data = resp.json()
+        candidates: Set[str] = set()
+
+        for key in ("FDNS_A", "FDNS_CNAME"):
+            entries = data.get(key) or []
+            for line in entries:
+                # format typique : "1.2.3.4,sub.example.com"
+                if not isinstance(line, str):
                     continue
-                parts = entry.split(",")
-                candidate = parts[-1].strip()
-                if candidate.endswith(domain):
-                    subs.add(candidate.lower().rstrip("."))
+                parts = line.split(",")
+                if len(parts) == 2:
+                    host = parts[1].strip()
+                    candidates.add(host)
+                else:
+                    # parfois juste un hostname
+                    candidates.add(line.strip())
+        return _dedupe_filter(candidates, domain)
     except Exception as e:
-        LOG.debug("bufferover error for %s: %s", domain, e)
-    return subs
+        logger.warning("BufferOver error for %s: %s", domain, e)
+        return set()
 
 
-def gather_passive(domain: str, sources: Iterable[str] = ("crtsh", "certspotter", "bufferover")) -> Set[str]:
+# ------------------ HackerTarget (fallback léger) ------------------
+
+
+def hackertarget(domain: str) -> Set[str]:
     """
-    Wrapper qui combine plusieurs sources passives.
-    'crtsh' reste géré ailleurs — on inclut ici certspotter & bufferover.
+    Utilise l'API gratuite de HackerTarget (limites fortes, mais utile en fallback).
+
+    Endpoint : https://api.hackertarget.com/hostsearch/?q=example.com
+    Format : "sub.example.com,1.2.3.4" par ligne.
     """
-    out: Set[str] = set()
-    for s in sources:
-        if s == "certspotter":
-            out |= certspotter(domain)
-        elif s == "bufferover" or s == "buffer":
-            out |= bufferover(domain)
-        # leave 'crtsh' to existing implementation
-    return out
+    url = "https://api.hackertarget.com/hostsearch/"
+    params = {"q": domain}
+    headers = {"User-Agent": USER_AGENT}
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
+        # HackerTarget renvoie 200 même en cas d'erreur, souvent sous forme de texte. On filtre un peu.
+        if resp.status_code != 200:
+            logger.warning("HackerTarget HTTP %s for %s", resp.status_code, domain)
+            return set()
+        text = resp.text
+        candidates: Set[str] = set()
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or "," not in line:
+                continue
+            host, _ip = line.split(",", 1)
+            candidates.add(host.strip())
+        return _dedupe_filter(candidates, domain)
+    except Exception as e:
+        logger.warning("HackerTarget error for %s: %s", domain, e)
+        return set()
+
+
+# ------------------ Orchestrateur ------------------
+
+
+def gather_passive(
+    domain: str,
+    sources: Optional[List[Callable[[str], Set[str]]]] = None,
+) -> Set[str]:
+    """
+    Combine plusieurs sources passives en un seul set de sous-domaines.
+    Par défaut : CertSpotter + BufferOver + HackerTarget.
+    """
+    if sources is None:
+        sources = [certspotter, bufferover, hackertarget]
+
+    all_names: Set[str] = set()
+    for fn in sources:
+        try:
+            subnames = fn(domain)
+            if subnames:
+                logger.info("[passive] %s -> %d sous-domaines", fn.__name__, len(subnames))
+            all_names.update(subnames)
+        except Exception as e:
+            logger.warning("Passive source %s failed for %s: %s", fn.__name__, domain, e)
+
+    return _dedupe_filter(all_names, domain)
+
+
+__all__ = ["certspotter", "bufferover", "hackertarget", "gather_passive"]
