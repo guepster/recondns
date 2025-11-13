@@ -13,7 +13,7 @@ recondns = un mini “amass-lite” focalisé sur la surveillance DNS et la dét
 
 ---
 
-# Info (commande)
+# Résumé rapide : info
 
 ## Résumé DNS + passif
 recondns info example.com
@@ -26,7 +26,7 @@ recondns info example.com --check-takeover --provider-filter aws
 
 ---
 
-# Snapshot (commande)
+# Snapshot complet : snapshot
 
 ## Snapshot simple en JSON
 recondns snapshot example.com
@@ -36,6 +36,16 @@ recondns snapshot example.com -o data/example_snapshot.json
 
 ## Snapshot + historique SQLite
 recondns snapshot example.com --db data/recondns.sqlite
+
+---
+
+# Historique (SQLite) : history
+
+## Liste simple
+recondns history example.com --db data/recondns.sqlite
+
+## Export Markdown
+recondns history example.com --db data/recondns.sqlite --md --out history.md
 
 ---
 
@@ -49,6 +59,20 @@ recondns diff example.com --db data/recondns.sqlite --from 3 --to 7 --html diff_
 
 ---
 
+# Mode fichiers : track, timeline, diff-json
+
+## Scan et snapshot JSON local
+recondns track example.com
+
+## Voir la timeline locale
+recondns timeline example.com
+
+## Diff entre deux snapshots JSON (N-1 vs N par défaut) en Markdown
+recondns diff-json example.com --md
+
+
+---
+
 # 🚀 Installation
 
 ```bash
@@ -57,4 +81,10 @@ source .venv/bin/activate   # Windows : .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
 
+---
+
+***Avertissement légal
+
+N’utilise cet outil que sur des domaines pour lesquels tu disposes d’une autorisation explicite, ou dans un cadre strictement éducatif/légal.
+Toute utilisation abusive est sous la responsabilité de l’utilisateur.***
 
