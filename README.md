@@ -36,13 +36,13 @@ Options utiles :
 - --check-takeover + --signatures + --provider-filter : takeover
 
 ## Résumé DNS + passif
-recondns info example.com
+```recondns info example.com```
 
 ## Résumé + bruteforce avec wordlist
-recondns info example.com --wordlist wordlists/common.txt
+```recondns info example.com --wordlist wordlists/common.txt```
 
 ## Avec détection de takeover filtrée sur un provider
-recondns info example.com --check-takeover --provider-filter aws
+```recondns info example.com --check-takeover --provider-filter aws```
 
 ---
 
@@ -56,23 +56,23 @@ Contenu du JSON :
   - mail_security : MX / SPF / DMARC / DKIM (hint)
 
 ## Snapshot simple en JSON
-recondns snapshot example.com
+```recondns snapshot example.com```
 
 ## Snapshot vers un fichier spécifique
-recondns snapshot example.com -o data/example_snapshot.json
+```recondns snapshot example.com -o data/example_snapshot.json```
 
 ## Snapshot + historique SQLite
-recondns snapshot example.com --db data/recondns.sqlite
+```recondns snapshot example.com --db data/recondns.sqlite```
 
 ---
 
 # Historique (SQLite) : history
 
 ## Liste simple
-recondns history example.com --db data/recondns.sqlite
+```recondns history example.com --db data/recondns.sqlite```
 
 ## Export Markdown
-recondns history example.com --db data/recondns.sqlite --md --out history.md
+```recondns history example.com --db data/recondns.sqlite --md --out history.md```
 
 ---
 
@@ -83,10 +83,10 @@ Le diff montre :
   - Changement sur les findings takeover
 
 ## Diff console
-recondns diff example.com --db data/recondns.sqlite --from 3 --to 7
+```recondns diff example.com --db data/recondns.sqlite --from 3 --to 7```
 
 ## Diff + rapport HTML complet
-recondns diff example.com --db data/recondns.sqlite --from 3 --to 7 --html diff_3_7.html
+```recondns diff example.com --db data/recondns.sqlite --from 3 --to 7 --html diff_3_7.html```
 
 ---
 
@@ -94,13 +94,13 @@ recondns diff example.com --db data/recondns.sqlite --from 3 --to 7 --html diff_
 Les snapshots JSON sont stockés dans : data/<domaine>/YYYYmmdd_HHMMSS[_{label}].json.
 
 ## Scan et snapshot JSON local
-recondns track example.com
+```recondns track example.com```
 
 ## Voir la timeline locale
-recondns timeline example.com
+```recondns timeline example.com```
 
 ## Diff entre deux snapshots JSON (N-1 vs N par défaut) en Markdown
-recondns diff-json example.com --md
+```recondns diff-json example.com --md```
 
 
 ---
