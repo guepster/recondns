@@ -24,7 +24,7 @@ recondns info example.com --wordlist wordlists/common.txt
 ## Avec détection de takeover filtrée sur un provider
 recondns info example.com --check-takeover --provider-filter aws
 
-
+/n
 
 # Snapshot (commande)
 
