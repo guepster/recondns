@@ -386,7 +386,7 @@ def info(
     # =========================
     #  SECTION : SURFACE SUMMARY
     # =========================
-    click.echo("[ SURFACE SUMMARY ]")
+    click.echo(title("[ SURFACE SUMMARY ]"))
     click.echo(f"  Sous-domaines découverts    : {total_subdomains}")
     click.echo(f"  Sous-domaines résolus (A)   : {resolved_subdomains}")
     click.echo(f"  IP uniques                  : {unique_ips}")
@@ -663,7 +663,7 @@ def info(
         else:
             findings.append("⚠ Aucune info mail analysée : MX/SPF/DMARC non présents ou non résolus.")
 
-        click.echo("[ FINDINGS ]")
+        click.echo(title("[ FINDINGS ]"))
         for f in findings:
             click.echo(f"  • {f}")
         click.echo("")
@@ -693,7 +693,7 @@ def info(
         if not next_steps:
             next_steps.append("Aucune action urgente détectée : monitorer périodiquement avec `snapshot` + `diff`.")
 
-        click.echo("[ NEXT STEPS ]")
+        click.echo(title("[ NEXT STEPS ]"))
         for s in next_steps:
             click.echo(f"  • {s}")
         click.echo("")
