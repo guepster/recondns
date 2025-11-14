@@ -132,7 +132,7 @@ from .storage import (
     save_snapshot as fs_save_snapshot,
 )
 
-
+@click.version_option("0.1.0", prog_name="recondns")
 @click.group(invoke_without_command=True)
 @click.pass_context
 def main(ctx):
@@ -155,16 +155,30 @@ def console():
     start_console()
 
 
+
 # ---------- SNAPSHOT ----------
 @main.command()
 @click.argument("domain")
-@click.option("--out", "-o", default=None, help="Fichier de sortie JSON (si non précisé auto gen)")
 @click.option(
-    "--no-crt", is_flag=True, default=False, help="Désactive l'appel vers crt.sh (rapide & safe)"
+    "--out", "-o", default=None,
+    help="Fichier de sortie JSON (si non précisé, nom auto dans ./data/)."
 )
-@click.option("--resolver", "-r", default=None, help="IP d'un résolveur DNS (ex: 1.1.1.1)")
-@click.option("--timeout", default=2.0, type=float, help="Timeout DNS en secondes")
-@click.option("--retries", default=1, type=int, help="Nombre de retries DNS")
+@click.option(
+    "--no-crt", is_flag=True, default=False,
+    help="Désactive l'appel vers crt.sh (rapide & safe)"
+)
+@click.option(
+    "--minimal",
+    is_flag=True,
+    default=False,
+    help="Affiche un résumé minimal après le snapshot (DNS/mail/surface)."
+)
+@click.option("--resolver", "-r", default=None,
+              help="IP d'un résolveur DNS (ex: 1.1.1.1)")
+@click.option("--timeout", default=2.0, type=float,
+              help="Timeout DNS en secondes")
+@click.option("--retries", default=1, type=int,
+              help="Nombre de retries DNS")
 @click.option(
     "--resolve-limit",
     default=None,
@@ -175,10 +189,11 @@ def console():
     "--check-takeover",
     is_flag=True,
     default=False,
-    help="Active la détection de Subdomain Takeover (lecture seule)",
+    help="Active la détection de Subdomain Takeover (lecture seule)"
 )
 @click.option(
-    "--signatures", default=None, help="Chemin vers un YAML de signatures (override par défaut)"
+    "--signatures", default=None,
+    help="Chemin vers un YAML de signatures (override par défaut)"
 )
 @click.option(
     "--takeover-workers",
@@ -186,13 +201,23 @@ def console():
     type=int,
     help="Nombre de threads pour checks takeover (default 8)",
 )
-@click.option("--takeover-delay", default=0.2, type=float, help="Délai entre checks takeover (sec)")
 @click.option(
-    "--takeover-verbose", is_flag=True, default=False, help="Mode verbeux pour takeover (logs)"
+    "--takeover-delay", default=0.2, type=float,
+    help="Délai entre checks takeover (sec)"
 )
-@click.option("--wordlist", default=None, help="Wordlist pour bruteforce de sous-domaines")
 @click.option(
-    "--bruteforce-depth", default=1, type=int, help="Profondeur de bruteforce (par défaut 1)"
+    "--takeover-verbose",
+    is_flag=True,
+    default=False,
+    help="Mode verbeux pour takeover (logs)"
+)
+@click.option(
+    "--wordlist", default=None,
+    help="Wordlist pour bruteforce de sous-domaines"
+)
+@click.option(
+    "--bruteforce-depth", default=1, type=int,
+    help="Profondeur de bruteforce (par défaut 1)"
 )
 @click.option(
     "--db",
@@ -203,6 +228,7 @@ def snapshot(
     domain,
     out,
     no_crt,
+    minimal,
     resolver,
     timeout,
     retries,
@@ -216,36 +242,79 @@ def snapshot(
     bruteforce_depth,
     db,
 ):
-    """Prend un snapshot DNS + passif + bruteforce pour DOMAIN
-    et l'exporte en JSON (et DB si --db)."""
+    """
+    Prend un snapshot complet (DNS + passif + bruteforce + takeover) pour DOMAIN.
+
+    - Écrit un JSON (local) avec tous les détails
+    - Optionnellement, enregistre aussi dans une DB SQLite (--db)
+    """
     if takeover_verbose:
         logging.getLogger("recondns").setLevel(logging.DEBUG)
 
-    click.echo(f"[+] Snapshot pour {domain} ...")
+    click.echo(f"[ SNAPSHOT ] Target: {domain}")
+    click.echo("  ↳ collecte en cours...")
 
     report = snapshot_domain(
         domain,
-        use_crt=True,
-        resolver_ips=None,  # résolveur système
-        timeout=2.0,
-        retries=1,
+        use_crt=(not no_crt),
+        resolver_ips=[resolver] if resolver else None,
+        timeout=timeout,
+        retries=retries,
         resolve_limit=resolve_limit,
         check_takeover=check_takeover,
-        signatures_path=None,
-        takeover_max_workers=8,
-        takeover_delay=0.2,
-        takeover_verbose=False,
-        wordlist=None,
-        bruteforce_depth=1,
+        signatures_path=signatures,
+        takeover_max_workers=takeover_workers,
+        takeover_delay=takeover_delay,
+        takeover_verbose=takeover_verbose,
+        wordlist=wordlist,
+        bruteforce_depth=bruteforce_depth,
     )
 
+    # Sauvegarde JSON (fichiers)
     outfile = export_snapshot(report, out)
     click.echo(f"[+] Snapshot écrit : {outfile}")
 
+    # Sauvegarde DB (optionnelle)
     if db:
         init_db(db)
         snap_id = db_save_snapshot(db, report)
         click.echo(f"[+] Snapshot sauvegardé en DB ({db}) avec id={snap_id}")
+
+    # --- Résumé minimal optionnel (réutilise la logique de info --minimal) ---
+    if minimal:
+        dns = report.get("dns", {}) or {}
+        mail_sec = report.get("mail_security") or {}
+        crt_subs = report.get("crt_subdomains") or []
+        subs_data = report.get("crt_subdomains_resolved") or {}
+        ip_enrich = report.get("ip_enrichment") or {}
+
+        total_subdomains = len(crt_subs)
+        resolved_subdomains = len(subs_data)
+        unique_ips = len(ip_enrich) if ip_enrich else len(set(dns.get("A", [])))
+
+        click.echo("")
+        click.echo(title("[ SUMMARY ]"))
+        click.echo(f"  Domain   : {domain}")
+        click.echo(
+            f"  DNS      : A={len(dns.get('A', []))} "
+            f"AAAA={len(dns.get('AAAA', []))} "
+            f"MX={len(dns.get('MX', []))} "
+            f"NS={len(dns.get('NS', []))} "
+            f"TXT={len(dns.get('TXT', []))}"
+        )
+
+        spf = "OK" if mail_sec.get("has_spf") else "NO"
+        dmarc = "OK" if mail_sec.get("has_dmarc") else "NO"
+        dkim = "OK" if mail_sec.get("has_dkim_hint") else "-"
+
+        click.echo(
+            f"  Mail     : SPF={spf}  DMARC={dmarc}  DKIM={dkim}"
+        )
+        click.echo(
+            f"  Surface  : subs={total_subdomains}  resolved={resolved_subdomains}  ips={unique_ips}"
+        )
+
+    return
 
 
 # ---------- INFO ----------
@@ -295,6 +364,12 @@ def snapshot(
         "(ex: --provider-filter heroku --provider-filter s3)"
     ),
 )
+@click.option(
+    "--minimal",
+    is_flag=True,
+    default=False,
+    help="Affiche uniquement les informations essentielles (sortie simplifiée).",
+)
 def info(
     domain,
     no_crt,
@@ -311,6 +386,7 @@ def info(
     bruteforce_depth,
     outfile,
     provider_filter,
+    minimal,          
 ):
     """Affiche un résumé en console (A / NS / MX counts + découverte passive/bruteforce)."""
 
@@ -318,7 +394,7 @@ def info(
     if takeover_verbose:
         logging.getLogger("recondns").setLevel(logging.DEBUG)
 
-    # ⚠️ ON CRÉE D'ABORD LE REPORT ICI
+    # --- Snapshot complet ---
     report = snapshot_domain(
         domain,
         use_crt=(not no_crt),
@@ -342,6 +418,77 @@ def info(
     takeovers = report.get("takeover_checks") or []
     ip_enrich = report.get("ip_enrichment") or {}
     mail_sec = report.get("mail_security") or {}
+
+    # --- Calculs surface globale ---
+    total_subdomains = len(crt_subs)
+    resolved_subdomains = len(subs_data)
+    unique_ips = len(ip_enrich) if ip_enrich else len(set(dns.get("A", [])))
+    countries = sorted(
+        {info.get("country") for info in ip_enrich.values() if info.get("country")}
+    )
+    asns = sorted(
+        {info.get("asn") for info in ip_enrich.values() if info.get("asn")}
+    )
+    clouds = sorted(
+        {
+            info.get("cloud")
+            for info in ip_enrich.values()
+            if info.get("cloud") and info.get("cloud") != "-"
+        }
+    )
+
+    # --- Filtre provider pour takeover (si demandé) ---
+    if provider_filter:
+        wanted = {p.lower().strip() for p in provider_filter}
+        takeovers = [
+            t for t in takeovers
+            if (t.get("provider") or "").lower() in wanted
+        ]
+
+    # =========================
+    #  MODE MINIMAL
+    # =========================
+    if minimal:
+        click.echo(title("\n[ TARGET ]"))
+        click.echo(f"  {domain}\n")
+
+        # DNS résumé
+        click.echo(title("[ DNS ]"))
+        click.echo(
+            f"  A: {len(dns.get('A', []))}    "
+            f"AAAA: {len(dns.get('AAAA', []))}    "
+            f"MX: {len(dns.get('MX', []))}    "
+            f"NS: {len(dns.get('NS', []))}    "
+            f"TXT: {len(dns.get('TXT', []))}"
+        )
+        click.echo("")
+
+        # Mail résumé
+        click.echo(title("[ MAIL ]"))
+        spf = ok("OK") if mail_sec.get("has_spf") else bad("NO")
+        dmarc = ok("OK") if mail_sec.get("has_dmarc") else bad("NO")
+        dkim = ok("OK") if mail_sec.get("has_dkim_hint") else warn("-")
+
+        click.echo(f"  SPF: {spf}   DMARC: {dmarc}   DKIM: {dkim}")
+        click.echo("")
+
+        # Surface
+        click.echo(title("[ SURFACE ]"))
+        click.echo(
+            f"  Subdomains: {total_subdomains}   "
+            f"Resolved: {resolved_subdomains}   "
+            f"IPs: {unique_ips}"
+        )
+        click.echo("")
+
+        # Export JSON éventuel
+        if outfile:
+            import json
+            with open(outfile, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2)
+            click.echo(f"JSON écrit dans {outfile}")
+
+        return
 
     # --- Filtre provider pour takeover (si demandé) ---
     if provider_filter:
@@ -378,10 +525,14 @@ def info(
         }
     )
 
+    
+
 
     # ---------- HEADER ----------
     click.echo(title("\n[ TARGET ]"))
     click.echo(f"  {domain}\n")
+
+    
 
     # =========================
     #  SECTION : SURFACE SUMMARY
