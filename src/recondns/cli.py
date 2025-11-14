@@ -1,8 +1,110 @@
 # --- CLI / logging
 import logging
 from pathlib import Path
-
 import click
+
+# Optionnel mais conseillé sous Windows
+try:
+    import colorama
+    colorama.init()
+except ImportError:
+    pass
+
+# --- Helpers pour le rendu CLI (couleurs / titres) ---
+RESET = "\033[0m"
+BOLD = "\033[1m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+
+def title(text: str) -> str:
+    """Titre de section en bleu clair et gras."""
+    return click.style(text, fg="bright_blue", bold=True)
+
+
+def ok(text: str) -> str:
+    return click.style(text, fg="green")
+
+
+def warn(text: str) -> str:
+    return click.style(text, fg="yellow")
+
+
+def bad(text: str) -> str:
+    return click.style(text, fg="red")
+
+# --- Helpers d'analyse avancée ---
+
+def categorize_subdomain(name: str) -> list[str]:
+    """Retourne une liste de tags pour un sous-domaine (admin, auth, api, dev, mail...)."""
+    name_l = name.lower()
+    tags: list[str] = []
+
+    if any(k in name_l for k in ["admin", "panel", "backoffice", "cpanel"]):
+        tags.append("admin")
+    if any(k in name_l for k in ["login", "auth", "sso", "idp"]):
+        tags.append("auth")
+    if any(k in name_l for k in ["api", "graphql"]):
+        tags.append("api")
+    if any(k in name_l for k in ["dev", "test", "stage", "recette", "preprod"]):
+        tags.append("dev")
+    if any(k in name_l for k in ["mail", "smtp", "mx", "webmail", "owa"]):
+        tags.append("mail")
+
+    return tags
+
+
+def compute_risk_score(total_subdomains: int,
+                       clouds: list[str],
+                       mail_sec: dict | None,
+                       takeover_count: int) -> tuple[int, str]:
+    """
+    Score très simple 0–100 + niveau (Low/Medium/High).
+    Pas scientifique, juste cohérent et lisible.
+    """
+    score = 100
+
+    # Surface DNS
+    if total_subdomains > 200:
+        score -= 30
+    elif total_subdomains > 50:
+        score -= 20
+    elif total_subdomains > 10:
+        score -= 10
+
+    # Clouds publics
+    if len(clouds) > 2:
+        score -= 15
+    elif len(clouds) == 2:
+        score -= 8
+    elif len(clouds) == 1:
+        score -= 3  # un seul cloud, complexité moindre
+
+    # Mail
+    if mail_sec:
+        if not mail_sec.get("has_spf"):
+            score -= 10
+        if not mail_sec.get("has_dmarc"):
+            score -= 10
+        if not mail_sec.get("has_dkim_hint"):
+            score -= 5
+    else:
+        score -= 10  # aucune info mail -> on pénalise un peu
+
+    # Takeover potentiels
+    if takeover_count > 0:
+        score -= 20
+
+    if score >= 80:
+        level = "Low"
+    elif score >= 50:
+        level = "Medium"
+    else:
+        level = "High"
+
+    return max(score, 0), level
+
+
 
 from .core import snapshot_domain
 from .db import (
@@ -233,65 +335,400 @@ def info(
         bruteforce_depth=bruteforce_depth,
     )
 
-    # ---- Résumé DNS ----
-    dns = report.get("dns", {})
-    click.echo(f"Domain: {domain}")
-    for k in ["A", "AAAA", "NS", "MX", "TXT", "CNAME"]:
-        click.echo(f" {k}: {len(dns.get(k, []))} entrées")
-    click.echo(f"crt.sh sous-domaines trouvés: {len(report.get('crt_subdomains', []))}")
+    # --- Extraction des données de base ---
+    dns = report.get("dns", {}) or {}
+    crt_subs = report.get("crt_subdomains") or []
+    subs_data = report.get("crt_subdomains_resolved") or {}
+    takeovers = report.get("takeover_checks") or []
+    ip_enrich = report.get("ip_enrichment") or {}
+    mail_sec = report.get("mail_security") or {}
 
-    # ---- Takeover ----
+    # --- Filtre provider pour takeover (si demandé) ---
+    if provider_filter:
+        wanted = {p.lower().strip() for p in provider_filter}
+        takeovers = [
+            t
+            for t in takeovers
+            if (t.get("provider") or "").lower() in wanted
+        ]
+
+    # --- Calculs pour la surface globale ---
+    total_subdomains = len(crt_subs)
+    resolved_subdomains = len(subs_data)
+    unique_ips = len(ip_enrich) if ip_enrich else len(set(dns.get("A", [])))
+    countries = sorted(
+        {
+            info.get("country")
+            for info in ip_enrich.values()
+            if info.get("country")
+        }
+    )
+    asns = sorted(
+        {
+            info.get("asn")
+            for info in ip_enrich.values()
+            if info.get("asn")
+        }
+    )
+    clouds = sorted(
+        {
+            info.get("cloud")
+            for info in ip_enrich.values()
+            if info.get("cloud") and info.get("cloud") != "-"
+        }
+    )
+
+
+    # ---------- HEADER ----------
+    click.echo(title("\n[ TARGET ]"))
+    click.echo(f"  {domain}\n")
+
+    # =========================
+    #  SECTION : SURFACE SUMMARY
+    # =========================
+    click.echo("[ SURFACE SUMMARY ]")
+    click.echo(f"  Sous-domaines découverts    : {total_subdomains}")
+    click.echo(f"  Sous-domaines résolus (A)   : {resolved_subdomains}")
+    click.echo(f"  IP uniques                  : {unique_ips}")
+    if asns:
+        click.echo(f"  Fournisseurs (ASN)          : {', '.join(asns)}")
+    if countries:
+        click.echo(f"  Pays d'hébergement          : {', '.join(countries)}")
+    if clouds:
+        click.echo(f"  Clouds publics détectés     : {', '.join(clouds)}")
+    else:
+        click.echo("  Clouds publics détectés     : aucun (hébergement classique)")
+    click.echo("")
+
+    # ---------- DNS SUMMARY ----------
+    click.echo(title("[ DNS SUMMARY ]"))
+    for k, desc in [
+        ("A", "IPv4"),
+        ("AAAA", "IPv6"),
+        ("NS", "Name Servers"),
+        ("MX", "Mail exchangers"),
+        ("TXT", "TXT"),
+        ("CNAME", "Aliases"),
+    ]:
+        count = len(dns.get(k, []))
+        click.echo(f"  {k:<5}: {count:<6} ({desc})")
+    click.echo(f"  crt.sh sous-domaines : {len(report.get('crt_subdomains', []))}\n")
+
+
+    # ---------- SOUS-DOMAINS ----------
+    crt_subs = report.get("crt_subdomains") or []
+    passive_subs = report.get("passive_subdomains") or []
+    brute_subs = (report.get("bruteforce") or {}).get("found", []) or []
+
+    all_subs = sorted(set(crt_subs + passive_subs + brute_subs))
+
+    high_value: list[tuple[str, list[str]]] = []
+    dev_envs: list[str] = []
+
+    if all_subs:
+        # On tague tous les sous-domaines
+        for s in all_subs:
+            tags = categorize_subdomain(s)
+            if tags:
+                if any(t in tags for t in ["admin", "auth", "api"]):
+                    high_value.append((s, tags))
+                if "dev" in tags:
+                    dev_envs.append(s)
+
+        # --- listing général ---
+        click.echo(title("[ SUBDOMAINS ]"))
+
+        click.echo(f"  Total : {len(all_subs)} sous-domaines")
+        max_show = 40
+        to_show = all_subs[:max_show]
+
+        for s in to_show:
+            click.echo(f"   • {s}")
+
+        if len(all_subs) > max_show:
+            click.echo(
+                warn(
+                    f"   + {len(all_subs)-max_show} autres "
+                    "(utilise --out pour JSON complet)"
+                )
+            )
+
+        click.echo("")
+
+        # --- HIGH VALUE ---
+        if high_value:
+            click.echo(title("[ HIGH-VALUE SUBDOMAINS ]"))
+            for s, tags in high_value[:25]:
+                tag_txt = ", ".join(tags)
+                click.echo(f"   • {s:<40} [{tag_txt}]")
+            if len(high_value) > 25:
+                click.echo(
+                    warn(
+                        f"   + {len(high_value)-25} autres high-value "
+                        "(voir JSON complet)."
+                    )
+                )
+            click.echo("")
+
+        # --- DEV / RECETTE / TEST ---
+        if dev_envs:
+            click.echo(title("[ DEV / TEST / RECETTE ]"))
+            for s in dev_envs[:25]:
+                click.echo(f"   • {s}")
+            if len(dev_envs) > 25:
+                click.echo(
+                    warn(
+                        f"   + {len(dev_envs)-25} autres environnements "
+                        "non-prod détectés."
+                    )
+                )
+            click.echo("")
+
+
+
+    # ---------- TAKEOVER ----------
     takeovers = report.get("takeover_checks") or []
 
     # Filtre éventuel par provider
     if provider_filter:
         wanted = {p.lower().strip() for p in provider_filter}
-        takeovers = [t for t in takeovers if (t.get("provider") or "").lower() in wanted]
+        takeovers = [
+            t
+            for t in takeovers
+            if (t.get("provider") or "").lower() in wanted
+        ]
 
-    if takeovers:
-        click.echo("Possible takeover findings:")
-        for t in takeovers:
-            click.echo(
-                f" - {t.get('host')} -> {t.get('provider')} "
-                f"({t.get('method')}) [{t.get('scheme')} {t.get('status')}]"
-            )
-    elif check_takeover:
-        click.echo("No takeover signatures found (ou filtrées par provider).")
+    if check_takeover:
+        click.echo(title("[ TAKEOVER CHECKS ]"))
+        if takeovers:
+            for t in takeovers:
+                host = t.get("host")
+                provider = t.get("provider") or "?"
+                method = t.get("method") or "?"
+                scheme = t.get("scheme") or "http"
+                status = t.get("status")
+                status_txt = f"{scheme.upper()} {status}" if status is not None else scheme.upper()
+                click.echo(f"  • {host} -> {provider} ({method}) [{status_txt}]")
+        else:
+            click.echo("  Aucun résultat (ou filtré par provider).")
+        click.echo("")
 
-    # ---- Enrichissement IP ----
+    # ---------- IP ENRICHMENT ----------
     ip_enrich = report.get("ip_enrichment") or {}
     if ip_enrich:
-        click.echo("\nIP enrichment (ASN / Country / Cloud):")
+        click.echo(title("[ IP ENRICHMENT ]"))
         for ip, info in ip_enrich.items():
             asn = info.get("asn") or "-"
             org = info.get("org") or "-"
             country = info.get("country") or "-"
             cloud = info.get("cloud") or "-"
-            if cloud:
-                click.echo(f" {ip}  {country}  {asn}  {org}  [cloud={cloud}]")
+            if cloud and cloud != "-":
+                cloud_txt = f"{cloud}"
             else:
-                click.echo(f" {ip}  {country}  {asn}  {org}")
+                cloud_txt = "-"
+            click.echo(f"  {ip}")
+            click.echo(f"    ├─ Country : {country}")
+            click.echo(f"    ├─ ASN     : {asn}")
+            click.echo(f"    ├─ Org     : {org}")
+            click.echo(f"    └─ Cloud   : {cloud_txt}")
+        click.echo("")
 
-    # ---- Mail security ----
+        # ---------- PROVIDERS / HOSTING ----------
+    if ip_enrich:
+        # mapping (asn, org, cloud) -> {ips, subs}
+        providers: dict[tuple[str, str, str], dict[str, set[str]]] = {}
+
+        # 1) on initialise les providers avec les IPs
+        for ip, info_ip in ip_enrich.items():
+            asn = info_ip.get("asn") or "-"
+            org = info_ip.get("org") or "-"
+            cloud = info_ip.get("cloud") or "-"
+            key = (asn, org, cloud)
+            bucket = providers.setdefault(key, {"ips": set(), "subs": set()})
+            bucket["ips"].add(ip)
+
+        # 2) on tente de mapper les sous-domaines -> IPs via crt_subdomains_resolved
+        for sub, recs in subs_data.items():
+            # recs peut être dict ({"A": [...]}), liste d'IPs ou string
+            if isinstance(recs, dict):
+                ips_for_sub = recs.get("A") or []
+            elif isinstance(recs, list):
+                ips_for_sub = recs
+            else:
+                ips_for_sub = [recs]
+
+            for ip in ips_for_sub:
+                info_ip = ip_enrich.get(ip)
+                if not info_ip:
+                    continue
+                asn = info_ip.get("asn") or "-"
+                org = info_ip.get("org") or "-"
+                cloud = info_ip.get("cloud") or "-"
+                key = (asn, org, cloud)
+                bucket = providers.setdefault(key, {"ips": set(), "subs": set()})
+                bucket["ips"].add(ip)
+                bucket["subs"].add(sub)
+
+        if providers:
+            click.echo(title("[ PROVIDERS / HOSTING ]"))
+            for (asn, org, cloud), data in providers.items():
+                label_parts = []
+                if asn != "-":
+                    label_parts.append(asn)
+                if org != "-":
+                    label_parts.append(org)
+                if cloud != "-":
+                    label_parts.append(cloud)
+                label = " / ".join(label_parts) if label_parts else "(inconnu)"
+
+                click.echo(f"  {label}")
+                click.echo(f"    • IPs          : {len(data['ips'])}")
+                if data["subs"]:
+                    samples = sorted(data["subs"])
+                    if len(samples) > 5:
+                        samples = samples[:5] + ["..."]
+                    click.echo(f"    • Subdomains   : {', '.join(samples)}")
+                click.echo("")
+
+
+    # ---------- MAIL SECURITY ----------
     mail_sec = report.get("mail_security") or {}
     if mail_sec:
-        click.echo("\nMail security (MX / SPF / DMARC / DKIM hint):")
+        click.echo(title("[ MAIL SECURITY ]"))
         mx_hosts = mail_sec.get("mx_hosts") or []
         if mx_hosts:
-            click.echo(f" MX hosts: {', '.join(mx_hosts)}")
+            click.echo(f"  MX hosts     : {', '.join(mx_hosts)}")
         else:
-            click.echo(" MX: aucun enregistrement MX trouvé")
+            click.echo("  MX hosts     : (aucun)")
 
         has_spf = mail_sec.get("has_spf")
         has_dmarc = mail_sec.get("has_dmarc")
         has_dkim = mail_sec.get("has_dkim_hint")
 
-        click.echo(f" SPF:   {'OK' if has_spf else '❌ absent'}")
-        click.echo(f" DMARC: {'OK' if has_dmarc else '❌ absent'}")
+        click.echo(
+            f"  SPF          : "
+            f"{ok('✅ OK') if has_spf else bad('❌ absent')}"
+        )
+        click.echo(
+            f"  DMARC        : "
+            f"{ok('✅ OK') if has_dmarc else bad('❌ absent')}"
+        )
         if has_dkim:
-            click.echo(" DKIM: hint présent dans les TXT (à confirmer)")
+            click.echo(
+                f"  DKIM (hint)  : "
+                f"{warn('⚠ hint présent dans TXT (à confirmer)')}"
+            )
         else:
-            click.echo(" DKIM: aucun hint détecté (peut quand même être configuré)")
+            click.echo(
+                f"  DKIM (hint)  : "
+                f"{warn('⚠ aucun hint détecté (peut quand même être configuré)')}"
+            )
+        click.echo("")
+
+
+        
+        # =========================
+        #  SECTION : FINDINGS
+        # =========================
+        findings: list[str] = []
+
+        # Surface DNS
+        if total_subdomains <= 5:
+            findings.append("✔ Surface DNS très limitée (peu de sous-domaines exposés).")
+        elif total_subdomains <= 50:
+            findings.append("✔ Surface DNS modérée (enr. gérables mais à surveiller).")
+        else:
+            findings.append("⚠ Surface DNS large : prioriser l'inventaire & la réduction de la surface.")
+
+        # IP / clouds / pays
+        if countries and len(countries) > 1:
+            findings.append("⚠ Hébergement multi-pays : vérifier les contraintes légales/compliance.")
+        if clouds and len(clouds) > 1:
+            findings.append("⚠ Multiples clouds publics détectés : surface hybride potentiellement complexe.")
+        elif clouds:
+            findings.append("✔ Usage d'un cloud public unique (surface plus prévisible).")
+
+        # Mail
+        if mail_sec:
+            has_spf = mail_sec.get("has_spf")
+            has_dmarc = mail_sec.get("has_dmarc")
+            has_dkim = mail_sec.get("has_dkim_hint")
+
+            if has_spf and has_dmarc:
+                findings.append("✔ Mail protégé par SPF + DMARC (bonne base anti-spoofing).")
+            else:
+                findings.append("⚠ SPF/DMARC incomplets : risque de spoofing significatif.")
+            if not has_dkim:
+                findings.append("⚠ DKIM non détecté : à prévoir pour renforcer l'authenticité des mails.")
+        else:
+            findings.append("⚠ Aucune info mail analysée : MX/SPF/DMARC non présents ou non résolus.")
+
+        click.echo("[ FINDINGS ]")
+        for f in findings:
+            click.echo(f"  • {f}")
+        click.echo("")
+
+        # =========================
+        #  SECTION : NEXT STEPS
+        # =========================
+        next_steps: list[str] = []
+
+        if total_subdomains:
+            next_steps.append(
+                "Lancer un scan HTTP/HTTPS ciblé sur les hôtes exposés (80/443, titres et bannières)."
+            )
+        if ip_enrich and unique_ips > 0:
+            next_steps.append(
+                "Corréler ces IP avec tes logs SIEM / firewall pour repérer les flux suspects."
+            )
+        if mail_sec and not mail_sec.get("has_dkim_hint"):
+            next_steps.append(
+                "Mettre en place DKIM et vérifier l'alignement SPF/DKIM/DMARC sur le domaine d'envoi."
+            )
+        if check_takeover:
+            next_steps.append(
+                "Pour chaque CNAME / host potentiellement orphelin, vérifier le provider (AWS, Heroku, etc.)."
+            )
+
+        if not next_steps:
+            next_steps.append("Aucune action urgente détectée : monitorer périodiquement avec `snapshot` + `diff`.")
+
+        click.echo("[ NEXT STEPS ]")
+        for s in next_steps:
+            click.echo(f"  • {s}")
+        click.echo("")
+
+
+        # ---------- RISK SCORE ----------
+        score, level = compute_risk_score(
+            total_subdomains=total_subdomains,
+            clouds=clouds,
+            mail_sec=mail_sec,
+            takeover_count=len(takeovers),
+        )
+        click.echo(title("[ RISK SCORE ]"))
+        click.echo(f"  Global score   : {score} / 100")
+        click.echo(f"  Niveau         : {level}")
+        click.echo("")
+
+        # ---------- QUICK RISK VIEW ----------
+        click.echo(title("[ QUICK RISK VIEW ]"))
+        a_count = len(dns.get("A", []))
+        exposure = "faible" if a_count <= 5 else "moyenne" if a_count <= 20 else "élevée"
+
+        click.echo(f"  • Surface DNS       : {exposure}")
+        if has_spf and has_dmarc:
+            click.echo(f"  • Posture mail      : {ok('bonne (SPF/DMARC présents)')}")
+        elif has_spf or has_dmarc:
+            click.echo(f"  • Posture mail      : {warn('partielle (SPF ou DMARC manquant)')}")
+        else:
+            click.echo(f"  • Posture mail      : {bad('faible (ni SPF ni DMARC détectés)')}")
+        if not has_dkim:
+            click.echo(f"  • DKIM              : {warn('à vérifier / configurer si besoin')}")
+        click.echo("")
+
+
+
 
     # ---- Export JSON optionnel ----
     if outfile:
