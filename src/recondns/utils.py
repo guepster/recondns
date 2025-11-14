@@ -18,6 +18,7 @@ def make_snapshot_filename(domain):
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     return f"{domain}_snapshot_{ts}.json"
 
+
 def build_next_steps(report: dict) -> list[str]:
     steps = []
 
@@ -40,12 +41,16 @@ def build_next_steps(report: dict) -> list[str]:
     # 4) Multi-cloud ?
     clouds = {v.get("cloud") for v in ips.values() if v.get("cloud")}
     if len(clouds) >= 2:
-        steps.append("Vérifier la cohérence de l’architecture multi-cloud et les flux entre environnements.")
+        steps.append(
+            "Vérifier la cohérence de l’architecture multi-cloud et les flux entre environnements."
+        )
 
     # 5) Multi-pays ?
     countries = {v.get("country") for v in ips.values() if v.get("country")}
     if len(countries) >= 2:
-        steps.append("Vérifier les obligations légales/compliance liées à l'hébergement multi-pays.")
+        steps.append(
+            "Vérifier les obligations légales/compliance liées à l'hébergement multi-pays."
+        )
 
     # 6) Staging/dev/test détectés
     if any(s for s in subdomains if any(x in s for x in ("staging", "dev", "test", "recette"))):
@@ -53,15 +58,21 @@ def build_next_steps(report: dict) -> list[str]:
 
     # 7) Beaucoup de sous-domaines
     if len(subdomains) > 30:
-        steps.append("Mettre en place un inventaire/monitoring des sous-domaines (DNS surface monitoring).")
+        steps.append(
+            "Mettre en place un inventaire/monitoring des sous-domaines (DNS surface monitoring)."
+        )
 
     # 8) Beaucoup d’IP uniques (complexité surface)
     if len(ips) > 10:
-        steps.append("Rationaliser ou analyser la diversité des IPs exposées pour réduire la surface d’attaque.")
+        steps.append(
+            "Rationaliser ou analyser la diversité des IPs exposées pour réduire la surface d’attaque."
+        )
 
     # 9) Takeover
     if report.get("takeover_checks"):
-        steps.append("Corriger les CNAME orphelins ou configurations vulnérables (risque de takeover).")
+        steps.append(
+            "Corriger les CNAME orphelins ou configurations vulnérables (risque de takeover)."
+        )
 
     # 10) Domaine sans A records
     dns = report.get("dns", {})

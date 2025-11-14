@@ -9,10 +9,10 @@ from typing import Any, Callable, Dict, List
 @dataclass
 class NextStepRule:
     id: str
-    category: str        # ex: "dns", "mail", "cloud", "staging", "governance"
-    team: str            # RED, BLUE, CLOUD, GOV, MAIL, DEV
-    severity: str        # "info", "low", "medium", "high"
-    text: str            # message affiché à l'utilisateur
+    category: str  # ex: "dns", "mail", "cloud", "staging", "governance"
+    team: str  # RED, BLUE, CLOUD, GOV, MAIL, DEV
+    severity: str  # "info", "low", "medium", "high"
+    text: str  # message affiché à l'utilisateur
     condition: Callable[[Dict[str, Any]], bool]
 
 
@@ -64,6 +64,7 @@ def _register_rule(
 # RULE ENGINE
 # =======================
 
+
 def build_next_steps(report: Dict[str, Any]) -> Dict[str, List[str]]:
     """
     Applique toutes les règles et retourne un dict par team:
@@ -96,6 +97,7 @@ def build_next_steps(report: Dict[str, Any]) -> Dict[str, List[str]]:
 # -----------------------
 # Helpers sur le report
 # -----------------------
+
 
 def _get_dns(report: Dict[str, Any]) -> Dict[str, List[str]]:
     return report.get("dns") or {}
@@ -151,9 +153,7 @@ def _has_cloud(report: Dict[str, Any], name: str) -> bool:
 def _countries(report: Dict[str, Any]) -> List[str]:
     ip_enrich = _get_ip_enrichment(report)
     countries = {
-        str(info.get("country") or "").strip()
-        for info in ip_enrich.values()
-        if info.get("country")
+        str(info.get("country") or "").strip() for info in ip_enrich.values() if info.get("country")
     }
     return sorted(c for c in countries if c)
 
@@ -161,20 +161,14 @@ def _countries(report: Dict[str, Any]) -> List[str]:
 def _clouds(report: Dict[str, Any]) -> List[str]:
     ip_enrich = _get_ip_enrichment(report)
     clouds = {
-        str(info.get("cloud") or "").strip()
-        for info in ip_enrich.values()
-        if info.get("cloud")
+        str(info.get("cloud") or "").strip() for info in ip_enrich.values() if info.get("cloud")
     }
     return sorted(c for c in clouds if c and c != "-")
 
 
 def _unique_asns(report: Dict[str, Any]) -> List[str]:
     ip_enrich = _get_ip_enrichment(report)
-    asns = {
-        str(info.get("asn") or "").strip()
-        for info in ip_enrich.values()
-        if info.get("asn")
-    }
+    asns = {str(info.get("asn") or "").strip() for info in ip_enrich.values() if info.get("asn")}
     return sorted(a for a in asns if a)
 
 
@@ -316,8 +310,7 @@ _register_rule(
     category="mail",
     severity="info",
     text="SPF + DMARC configurés : surveiller les rapports DMARC pour détecter d’éventuels envois non autorisés.",
-    condition=lambda r: _get_mail(r).get("has_spf", False)
-    and _get_mail(r).get("has_dmarc", False),
+    condition=lambda r: _get_mail(r).get("has_spf", False) and _get_mail(r).get("has_dmarc", False),
 )
 
 _register_rule(

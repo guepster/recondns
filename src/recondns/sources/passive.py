@@ -119,6 +119,7 @@ def bufferover(domain: str) -> set[str]:
         logger.debug("BufferOver error for %s: %s", domain, e)
         return set()
 
+
 def bufferover_safe(domain: str) -> tuple[set[str], str | None]:
     """
     Variante de Bufferover qui remonte aussi un code d'erreur symbolique.
@@ -219,6 +220,7 @@ __all__ = [
     "gather_passive",
     "gather_passive_with_status",
 ]
+
 
 def gather_passive_with_status(domain: str) -> tuple[set[str], dict[str, str]]:
     """

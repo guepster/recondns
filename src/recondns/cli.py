@@ -8,6 +8,7 @@ from .recommendations import build_next_steps
 # Optionnel mais conseillé sous Windows
 try:
     import colorama
+
     colorama.init()
 except ImportError:
     pass
@@ -18,6 +19,7 @@ BOLD = "\033[1m"
 RED = "\033[31m"
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
+
 
 def title(text: str) -> str:
     """Titre de section en bleu clair et gras."""
@@ -35,7 +37,9 @@ def warn(text: str) -> str:
 def bad(text: str) -> str:
     return click.style(text, fg="red")
 
+
 # --- Helpers d'analyse avancée ---
+
 
 def categorize_subdomain(name: str) -> list[str]:
     """
@@ -86,13 +90,14 @@ def categorize_subdomain(name: str) -> list[str]:
     # Tu peux rajouter d’autres patterns plus tard
 
     return tags
+
+
 0
 
 
-def compute_risk_score(total_subdomains: int,
-                       clouds: list[str],
-                       mail_sec: dict | None,
-                       takeover_count: int) -> tuple[int, str]:
+def compute_risk_score(
+    total_subdomains: int, clouds: list[str], mail_sec: dict | None, takeover_count: int
+) -> tuple[int, str]:
     """
     Score très simple 0–100 + niveau (Low/Medium/High).
     Pas scientifique, juste cohérent et lisible.
@@ -140,7 +145,6 @@ def compute_risk_score(total_subdomains: int,
     return max(score, 0), level
 
 
-
 from .core import snapshot_domain
 from .db import (
     get_snapshot_by_id,
@@ -167,6 +171,7 @@ from .storage import (
     save_snapshot as fs_save_snapshot,
 )
 
+
 @click.version_option("0.1.0", prog_name="recondns")
 @click.group(invoke_without_command=True)
 @click.pass_context
@@ -190,30 +195,27 @@ def console():
     start_console()
 
 
-
 # ---------- SNAPSHOT ----------
 @main.command()
 @click.argument("domain")
 @click.option(
-    "--out", "-o", default=None,
-    help="Fichier de sortie JSON (si non précisé, nom auto dans ./data/)."
+    "--out",
+    "-o",
+    default=None,
+    help="Fichier de sortie JSON (si non précisé, nom auto dans ./data/).",
 )
 @click.option(
-    "--no-crt", is_flag=True, default=False,
-    help="Désactive l'appel vers crt.sh (rapide & safe)"
+    "--no-crt", is_flag=True, default=False, help="Désactive l'appel vers crt.sh (rapide & safe)"
 )
 @click.option(
     "--minimal",
     is_flag=True,
     default=False,
-    help="Affiche un résumé minimal après le snapshot (DNS/mail/surface)."
+    help="Affiche un résumé minimal après le snapshot (DNS/mail/surface).",
 )
-@click.option("--resolver", "-r", default=None,
-              help="IP d'un résolveur DNS (ex: 1.1.1.1)")
-@click.option("--timeout", default=2.0, type=float,
-              help="Timeout DNS en secondes")
-@click.option("--retries", default=1, type=int,
-              help="Nombre de retries DNS")
+@click.option("--resolver", "-r", default=None, help="IP d'un résolveur DNS (ex: 1.1.1.1)")
+@click.option("--timeout", default=2.0, type=float, help="Timeout DNS en secondes")
+@click.option("--retries", default=1, type=int, help="Nombre de retries DNS")
 @click.option(
     "--resolve-limit",
     default=None,
@@ -224,11 +226,10 @@ def console():
     "--check-takeover",
     is_flag=True,
     default=False,
-    help="Active la détection de Subdomain Takeover (lecture seule)"
+    help="Active la détection de Subdomain Takeover (lecture seule)",
 )
 @click.option(
-    "--signatures", default=None,
-    help="Chemin vers un YAML de signatures (override par défaut)"
+    "--signatures", default=None, help="Chemin vers un YAML de signatures (override par défaut)"
 )
 @click.option(
     "--takeover-workers",
@@ -236,29 +237,26 @@ def console():
     type=int,
     help="Nombre de threads pour checks takeover (default 8)",
 )
+@click.option("--takeover-delay", default=0.2, type=float, help="Délai entre checks takeover (sec)")
 @click.option(
-    "--takeover-delay", default=0.2, type=float,
-    help="Délai entre checks takeover (sec)"
+    "--takeover-verbose", is_flag=True, default=False, help="Mode verbeux pour takeover (logs)"
 )
+@click.option("--wordlist", default=None, help="Wordlist pour bruteforce de sous-domaines")
 @click.option(
-    "--takeover-verbose",
-    is_flag=True,
-    default=False,
-    help="Mode verbeux pour takeover (logs)"
-)
-@click.option(
-    "--wordlist", default=None,
-    help="Wordlist pour bruteforce de sous-domaines"
-)
-@click.option(
-    "--bruteforce-depth", default=1, type=int,
-    help="Profondeur de bruteforce (par défaut 1)"
+    "--bruteforce-depth", default=1, type=int, help="Profondeur de bruteforce (par défaut 1)"
 )
 @click.option(
     "--db",
     default=None,
     help="Chemin SQLite pour enregistrer l'historique (ex: data/recondns.sqlite)",
 )
+@click.option(
+    "--web-scan",
+    is_flag=True,
+    default=False,
+    help="Scan HTTP/HTTPS basique sur le domaine et les sous-domaines résolus.",
+)
+
 def snapshot(
     domain,
     out,
@@ -276,6 +274,7 @@ def snapshot(
     wordlist,
     bruteforce_depth,
     db,
+    web_scan
 ):
     """
     Prend un snapshot complet (DNS + passif + bruteforce + takeover) pour DOMAIN.
@@ -303,6 +302,7 @@ def snapshot(
         takeover_verbose=takeover_verbose,
         wordlist=wordlist,
         bruteforce_depth=bruteforce_depth,
+        web_scan=web_scan,
     )
 
     # Sauvegarde JSON (fichiers)
@@ -362,9 +362,7 @@ def snapshot(
         dmarc = "OK" if mail_sec.get("has_dmarc") else "NO"
         dkim = "OK" if mail_sec.get("has_dkim_hint") else "-"
 
-        click.echo(
-            f"  Mail     : SPF={spf}  DMARC={dmarc}  DKIM={dkim}"
-        )
+        click.echo(f"  Mail     : SPF={spf}  DMARC={dmarc}  DKIM={dkim}")
         click.echo(
             f"  Surface  : subs={total_subdomains}  resolved={resolved_subdomains}  ips={unique_ips}"
         )
@@ -425,6 +423,12 @@ def snapshot(
     default=False,
     help="Affiche uniquement les informations essentielles (sortie simplifiée).",
 )
+@click.option(
+    "--web-scan",
+    is_flag=True,
+    default=False,
+    help="Scan HTTP/HTTPS basique sur le domaine et les sous-domaines résolus.",
+)
 def info(
     domain,
     no_crt,
@@ -441,7 +445,8 @@ def info(
     bruteforce_depth,
     outfile,
     provider_filter,
-    minimal,          
+    minimal,
+    web_scan
 ):
     """Affiche un résumé en console (A / NS / MX counts + découverte passive/bruteforce)."""
 
@@ -464,6 +469,7 @@ def info(
         takeover_verbose=takeover_verbose,
         wordlist=wordlist,
         bruteforce_depth=bruteforce_depth,
+        web_scan=web_scan
     )
 
     # --- Extraction des données de base ---
@@ -478,12 +484,8 @@ def info(
     total_subdomains = len(crt_subs)
     resolved_subdomains = len(subs_data)
     unique_ips = len(ip_enrich) if ip_enrich else len(set(dns.get("A", [])))
-    countries = sorted(
-        {info.get("country") for info in ip_enrich.values() if info.get("country")}
-    )
-    asns = sorted(
-        {info.get("asn") for info in ip_enrich.values() if info.get("asn")}
-    )
+    countries = sorted({info.get("country") for info in ip_enrich.values() if info.get("country")})
+    asns = sorted({info.get("asn") for info in ip_enrich.values() if info.get("asn")})
     clouds = sorted(
         {
             info.get("cloud")
@@ -495,16 +497,13 @@ def info(
     # --- Filtre provider pour takeover (si demandé) ---
     if provider_filter:
         wanted = {p.lower().strip() for p in provider_filter}
-        takeovers = [
-            t for t in takeovers
-            if (t.get("provider") or "").lower() in wanted
-        ]
+        takeovers = [t for t in takeovers if (t.get("provider") or "").lower() in wanted]
 
     # =========================
     #  MODE MINIMAL
     # =========================
     if minimal:
-        click.echo(title("\n[ TARGET ]"))
+        click.echo(title("[ TARGET ]"))
         click.echo(f"  {domain}\n")
 
         # DNS résumé
@@ -539,6 +538,7 @@ def info(
         # Export JSON éventuel
         if outfile:
             import json
+
             with open(outfile, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2)
             click.echo(f"JSON écrit dans {outfile}")
@@ -548,30 +548,14 @@ def info(
     # --- Filtre provider pour takeover (si demandé) ---
     if provider_filter:
         wanted = {p.lower().strip() for p in provider_filter}
-        takeovers = [
-            t
-            for t in takeovers
-            if (t.get("provider") or "").lower() in wanted
-        ]
+        takeovers = [t for t in takeovers if (t.get("provider") or "").lower() in wanted]
 
     # --- Calculs pour la surface globale ---
     total_subdomains = len(crt_subs)
     resolved_subdomains = len(subs_data)
     unique_ips = len(ip_enrich) if ip_enrich else len(set(dns.get("A", [])))
-    countries = sorted(
-        {
-            info.get("country")
-            for info in ip_enrich.values()
-            if info.get("country")
-        }
-    )
-    asns = sorted(
-        {
-            info.get("asn")
-            for info in ip_enrich.values()
-            if info.get("asn")
-        }
-    )
+    countries = sorted({info.get("country") for info in ip_enrich.values() if info.get("country")})
+    asns = sorted({info.get("asn") for info in ip_enrich.values() if info.get("asn")})
     clouds = sorted(
         {
             info.get("cloud")
@@ -580,14 +564,9 @@ def info(
         }
     )
 
-    
-
-
     # ---------- HEADER ----------
-    click.echo(title("\n[ TARGET ]"))
+    click.echo(title("[ TARGET ]"))
     click.echo(f"  {domain}\n")
-
-    
 
     # =========================
     #  SECTION : SURFACE SUMMARY
@@ -619,7 +598,6 @@ def info(
         count = len(dns.get(k, []))
         click.echo(f"  {k:<5}: {count:<6} ({desc})")
     click.echo(f"  crt.sh sous-domaines : {len(report.get('crt_subdomains', []))}\n")
-
 
     # ---------- SOUS-DOMAINS ----------
     crt_subs = report.get("crt_subdomains") or []
@@ -653,10 +631,7 @@ def info(
 
         if len(all_subs) > max_show:
             click.echo(
-                warn(
-                    f"   + {len(all_subs)-max_show} autres "
-                    "(utilise --out pour JSON complet)"
-                )
+                warn(f"   + {len(all_subs)-max_show} autres " "(utilise --out pour JSON complet)")
             )
 
         click.echo("")
@@ -679,7 +654,6 @@ def info(
 
             click.echo("")
 
-
         # --- HIGH VALUE ---
         if high_value:
             click.echo(title("[ HIGH-VALUE SUBDOMAINS ]"))
@@ -688,10 +662,7 @@ def info(
                 click.echo(f"   • {s:<40} [{tag_txt}]")
             if len(high_value) > 25:
                 click.echo(
-                    warn(
-                        f"   + {len(high_value)-25} autres high-value "
-                        "(voir JSON complet)."
-                    )
+                    warn(f"   + {len(high_value)-25} autres high-value " "(voir JSON complet).")
                 )
             click.echo("")
 
@@ -702,14 +673,9 @@ def info(
                 click.echo(f"   • {s}")
             if len(dev_envs) > 25:
                 click.echo(
-                    warn(
-                        f"   + {len(dev_envs)-25} autres environnements "
-                        "non-prod détectés."
-                    )
+                    warn(f"   + {len(dev_envs)-25} autres environnements " "non-prod détectés.")
                 )
             click.echo("")
-
-
 
     # ---------- TAKEOVER ----------
     takeovers = report.get("takeover_checks") or []
@@ -717,11 +683,7 @@ def info(
     # Filtre éventuel par provider
     if provider_filter:
         wanted = {p.lower().strip() for p in provider_filter}
-        takeovers = [
-            t
-            for t in takeovers
-            if (t.get("provider") or "").lower() in wanted
-        ]
+        takeovers = [t for t in takeovers if (t.get("provider") or "").lower() in wanted]
 
     if check_takeover:
         click.echo(title("[ TAKEOVER CHECKS ]"))
@@ -758,7 +720,18 @@ def info(
             click.echo(f"    └─ Cloud   : {cloud_txt}")
         click.echo("")
 
-        # ---------- PROVIDERS / HOSTING ----------
+    if report.get("web"):
+        click.echo(title("[ IP ENRICHMENT ]"))
+        for host, data in report["web"].items():
+            status = data["http"].get("status", "?")
+            page_title = data["http"].get("title", "")
+            tech = ", ".join(data["http"].get("tech", []))
+
+            print(f"  • {host} → {status} {page_title} ({tech})")
+        click.echo("")
+
+
+    # ---------- PROVIDERS / HOSTING ----------
     if ip_enrich:
         # mapping (asn, org, cloud) -> {ips, subs}
         providers: dict[tuple[str, str, str], dict[str, set[str]]] = {}
@@ -815,7 +788,6 @@ def info(
                     click.echo(f"    • Subdomains   : {', '.join(samples)}")
                 click.echo("")
 
-
     # ---------- MAIL SECURITY ----------
     mail_sec = report.get("mail_security") or {}
     if mail_sec:
@@ -830,19 +802,10 @@ def info(
         has_dmarc = mail_sec.get("has_dmarc")
         has_dkim = mail_sec.get("has_dkim_hint")
 
-        click.echo(
-            f"  SPF          : "
-            f"{ok('✅ OK') if has_spf else bad('❌ absent')}"
-        )
-        click.echo(
-            f"  DMARC        : "
-            f"{ok('✅ OK') if has_dmarc else bad('❌ absent')}"
-        )
+        click.echo(f"  SPF          : " f"{ok('✅ OK') if has_spf else bad('❌ absent')}")
+        click.echo(f"  DMARC        : " f"{ok('✅ OK') if has_dmarc else bad('❌ absent')}")
         if has_dkim:
-            click.echo(
-                f"  DKIM (hint)  : "
-                f"{warn('⚠ hint présent dans TXT (à confirmer)')}"
-            )
+            click.echo(f"  DKIM (hint)  : " f"{warn('⚠ hint présent dans TXT (à confirmer)')}")
         else:
             click.echo(
                 f"  DKIM (hint)  : "
@@ -850,8 +813,6 @@ def info(
             )
         click.echo("")
 
-
-        
         # =========================
         #  SECTION : FINDINGS
         # =========================
@@ -863,13 +824,19 @@ def info(
         elif total_subdomains <= 50:
             findings.append("✔ Surface DNS modérée (enr. gérables mais à surveiller).")
         else:
-            findings.append("⚠ Surface DNS large : prioriser l'inventaire & la réduction de la surface.")
+            findings.append(
+                "⚠ Surface DNS large : prioriser l'inventaire & la réduction de la surface."
+            )
 
         # IP / clouds / pays
         if countries and len(countries) > 1:
-            findings.append("⚠ Hébergement multi-pays : vérifier les contraintes légales/compliance.")
+            findings.append(
+                "⚠ Hébergement multi-pays : vérifier les contraintes légales/compliance."
+            )
         if clouds and len(clouds) > 1:
-            findings.append("⚠ Multiples clouds publics détectés : surface hybride potentiellement complexe.")
+            findings.append(
+                "⚠ Multiples clouds publics détectés : surface hybride potentiellement complexe."
+            )
         elif clouds:
             findings.append("✔ Usage d'un cloud public unique (surface plus prévisible).")
 
@@ -884,9 +851,13 @@ def info(
             else:
                 findings.append("⚠ SPF/DMARC incomplets : risque de spoofing significatif.")
             if not has_dkim:
-                findings.append("⚠ DKIM non détecté : à prévoir pour renforcer l'authenticité des mails.")
+                findings.append(
+                    "⚠ DKIM non détecté : à prévoir pour renforcer l'authenticité des mails."
+                )
         else:
-            findings.append("⚠ Aucune info mail analysée : MX/SPF/DMARC non présents ou non résolus.")
+            findings.append(
+                "⚠ Aucune info mail analysée : MX/SPF/DMARC non présents ou non résolus."
+            )
 
         click.echo(title("[ FINDINGS ]"))
         for f in findings:
@@ -934,9 +905,6 @@ def info(
         if not has_dkim:
             click.echo(f"  • DKIM              : {warn('à vérifier / configurer si besoin')}")
         click.echo("")
-
-
-
 
     # ---- Export JSON optionnel ----
     if outfile:

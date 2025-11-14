@@ -340,23 +340,19 @@ def snapshot_domain(
     takeover_verbose: bool = False,
     wordlist: str | None = None,
     bruteforce_depth: int = 1,
+    web_scan: bool = False,  # 👈 déjà ok
 ) -> dict[str, Any]:
     now = datetime.utcnow().isoformat() + "Z"
     passive_subdomains, passive_errors = gather_passive_with_status(domain)
 
     # Résolveur robuste
-    nameservers = []
     if resolver_ips:
-        if resolver_ips:
-            nameservers = [ip.strip() for ip in resolver_ips if ip.strip()]
-        else:
-            nameservers = []
+        nameservers = [ip.strip() for ip in resolver_ips if ip.strip()]
     else:
         nameservers = ["1.1.1.1", "8.8.8.8"]
 
     resolver = make_resolver(nameservers)
 
-    # 1) DNS du domaine racine
     # 1) DNS du domaine racine
     dns_records = {
         "A": resolve_cached(domain, "A", resolver),
@@ -400,11 +396,7 @@ def snapshot_domain(
 
     # Normalisation finale
     crt_subs = sorted(
-        {
-            s.lower()
-            for s in all_subdomains
-            if isinstance(s, str) and s.strip()
-        }
+        {s.lower() for s in all_subdomains if isinstance(s, str) and s.strip()}
     )
 
     # 5) Résolution des sous-domaines
@@ -433,7 +425,9 @@ def snapshot_domain(
         for s in subs_data.keys():
             hosts_to_check.add(s)
 
-        hosts_list = [h for h in sorted(hosts_to_check) if any(ch.isalpha() for ch in h)]
+        hosts_list = [
+            h for h in sorted(hosts_to_check) if any(ch.isalpha() for ch in h)
+        ]
 
         if takeover_verbose:
             logger.info(
@@ -451,7 +445,8 @@ def snapshot_domain(
             verbose=takeover_verbose,
         )
 
-        # 7) Enrichissement IP (ASN / org / pays / cloud)
+    # 7) Enrichissement IP (ASN / org / pays / cloud)
+    # 🔧 IMPORTANT : dé-indenté hors du if check_takeover
     ip_set: set[str] = set()
 
     # IPs du domaine racine
@@ -465,17 +460,45 @@ def snapshot_domain(
     if ip_set:
         ip_enrichment = enrich_many(sorted(ip_set))
 
+    # 7.bis) WEB SCAN (HTTP/HTTPS) 👇
+    web_section: dict[str, Any] = {}
+    if web_scan:
+        from .webscan import scan_web_host  # 👈 à créer dans webscan.py
+
+        web_hosts: dict[str, Any] = {}
+
+        # Sous-domaines résolus
+        for hostname, rec in subs_data.items():
+            ips = rec.get("A") or []
+            if not ips:
+                continue
+            target_ip = ips[0]
+            web_hosts[hostname] = scan_web_host(hostname, target_ip)
+
+        # Domaine racine
+        root_ips = dns_records.get("A") or []
+        if root_ips:
+            web_hosts[domain] = scan_web_host(domain, root_ips[0])
+
+        if web_hosts:
+            web_section = {"hosts": web_hosts}
+
     # 8) Rapport final
     report: dict[str, Any] = {
         "domain": domain,
         "timestamp": now,
         "dns": dns_records,
-        "crt_subdomains": crt_subs,  # passif + bruteforce
-        "crt_subdomains_resolved": subs_data,  # sous-domaines avec A
+        "crt_subdomains": crt_subs,
+        "crt_subdomains_resolved": subs_data,
         "takeover_checks": takeover_checks,
-        "ip_enrichment": ip_enrichment,  # ASN / pays / cloud
+        "ip_enrichment": ip_enrichment,
         "mail_security": mail_security,
         "passive_subdomains": sorted(passive_subdomains),
         "passive_errors": passive_errors or None,
     }
+
+    # On n’ajoute "web" que si web_scan était activé et qu’on a des données
+    if web_section:
+        report["web"] = web_section
+
     return report
