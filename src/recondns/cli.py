@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 import click
 
+from .recommendations import build_next_steps
+
 # Optionnel mais conseillé sous Windows
 try:
     import colorama
@@ -36,22 +38,55 @@ def bad(text: str) -> str:
 # --- Helpers d'analyse avancée ---
 
 def categorize_subdomain(name: str) -> list[str]:
-    """Retourne une liste de tags pour un sous-domaine (admin, auth, api, dev, mail...)."""
-    name_l = name.lower()
+    """
+    Retourne une liste de tags pour un sous-domaine.
+    Ex: ["dev"], ["admin", "api"], ["prod"], etc.
+    """
+    n = name.lower()
+
     tags: list[str] = []
 
-    if any(k in name_l for k in ["admin", "panel", "backoffice", "cpanel"]):
-        tags.append("admin")
-    if any(k in name_l for k in ["login", "auth", "sso", "idp"]):
-        tags.append("auth")
-    if any(k in name_l for k in ["api", "graphql"]):
-        tags.append("api")
-    if any(k in name_l for k in ["dev", "test", "stage", "recette", "preprod"]):
+    # --- environnements non-prod / sensibles pour tests ---
+    dev_keywords = [
+        "dev.",
+        ".dev.",
+        "-dev.",
+        "test.",
+        ".test.",
+        "-test.",
+        "recette.",
+        ".recette.",
+        "-recette.",
+        "preprod.",
+        ".preprod.",
+        "-preprod.",
+        "staging.",
+        ".staging.",
+        "-staging.",
+        "sandbox.",
+        ".sandbox.",
+        "-sandbox.",
+        "beta.",
+        ".beta.",
+        "-beta.",
+    ]
+    if any(k in n for k in dev_keywords):
         tags.append("dev")
-    if any(k in name_l for k in ["mail", "smtp", "mx", "webmail", "owa"]):
-        tags.append("mail")
+
+    # --- endpoints sensibles "métier" / sécurité ---
+    if any(x in n.split(".")[0] for x in ["admin", "panel", "backoffice", "back-office"]):
+        tags.append("admin")
+    if any(x in n for x in ["api.", ".api."]):
+        tags.append("api")
+    if any(x in n for x in ["auth.", "login.", "sso.", "idp."]):
+        tags.append("auth")
+    if any(x in n for x in ["vpn.", "remote.", "rdp.", "gateway."]):
+        tags.append("remote")
+
+    # Tu peux rajouter d’autres patterns plus tard
 
     return tags
+0
 
 
 def compute_risk_score(total_subdomains: int,
@@ -287,6 +322,26 @@ def snapshot(
         crt_subs = report.get("crt_subdomains") or []
         subs_data = report.get("crt_subdomains_resolved") or {}
         ip_enrich = report.get("ip_enrichment") or {}
+
+        passive_errors = report.get("passive_errors") or {}
+
+        if passive_errors:
+            click.echo(title("[ PASSIVE SOURCES ]"))
+
+            crt_ok = "OK" if crt_subs else "no data"
+            click.echo(f"  crt.sh       : {crt_ok}")
+
+            buff_status = passive_errors.get("bufferover")
+            if buff_status is None:
+                click.echo("  Bufferover   : OK")
+            elif buff_status == "network_error":
+                click.echo("  Bufferover   : indisponible (erreur réseau)")
+            elif buff_status == "http_error":
+                click.echo("  Bufferover   : erreur HTTP côté API")
+            elif buff_status == "parse_error":
+                click.echo("  Bufferover   : réponse invalide (parse error)")
+            else:
+                click.echo(f"  Bufferover   : erreur ({buff_status})")
 
         total_subdomains = len(crt_subs)
         resolved_subdomains = len(subs_data)
@@ -606,6 +661,25 @@ def info(
 
         click.echo("")
 
+        # ---------- PASSIVE SOURCES ----------
+        passive_subs = report.get("passive_subdomains") or []
+        passive_errors = report.get("passive_errors") or {}
+
+        if passive_subs or passive_errors:
+            click.echo(title("[ PASSIVE SOURCES ]"))
+            click.echo(f"  Sous-domaines passifs uniques : {len(passive_subs)}")
+
+            if passive_errors:
+                click.echo("  Erreurs / limites sources :")
+                for src, err in passive_errors.items():
+                    # err peut être une string ou autre, on force en str
+                    click.echo(f"    - {src}: {str(err)}")
+            else:
+                click.echo("  Erreurs / limites sources : aucune")
+
+            click.echo("")
+
+
         # --- HIGH VALUE ---
         if high_value:
             click.echo(title("[ HIGH-VALUE SUBDOMAINS ]"))
@@ -822,33 +896,15 @@ def info(
         # =========================
         #  SECTION : NEXT STEPS
         # =========================
-        next_steps: list[str] = []
+        steps_by_team = build_next_steps(report)
 
-        if total_subdomains:
-            next_steps.append(
-                "Lancer un scan HTTP/HTTPS ciblé sur les hôtes exposés (80/443, titres et bannières)."
-            )
-        if ip_enrich and unique_ips > 0:
-            next_steps.append(
-                "Corréler ces IP avec tes logs SIEM / firewall pour repérer les flux suspects."
-            )
-        if mail_sec and not mail_sec.get("has_dkim_hint"):
-            next_steps.append(
-                "Mettre en place DKIM et vérifier l'alignement SPF/DKIM/DMARC sur le domaine d'envoi."
-            )
-        if check_takeover:
-            next_steps.append(
-                "Pour chaque CNAME / host potentiellement orphelin, vérifier le provider (AWS, Heroku, etc.)."
-            )
-
-        if not next_steps:
-            next_steps.append("Aucune action urgente détectée : monitorer périodiquement avec `snapshot` + `diff`.")
-
-        click.echo(title("[ NEXT STEPS ]"))
-        for s in next_steps:
-            click.echo(f"  • {s}")
-        click.echo("")
-
+        for team, items in steps_by_team.items():
+            if not items:
+                continue
+            click.echo(title(f"[ NEXT STEPS — {team} TEAM ]"))
+            for s in items:
+                click.echo(f"  • {s}")
+            click.echo("")
 
         # ---------- RISK SCORE ----------
         score, level = compute_risk_score(
@@ -857,6 +913,7 @@ def info(
             mail_sec=mail_sec,
             takeover_count=len(takeovers),
         )
+        click.echo("")
         click.echo(title("[ RISK SCORE ]"))
         click.echo(f"  Global score   : {score} / 100")
         click.echo(f"  Niveau         : {level}")

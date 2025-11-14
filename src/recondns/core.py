@@ -13,6 +13,7 @@ import yaml
 from .bruteforce import bruteforce_subdomains
 from .dns.robust_resolver import make_resolver, resolve_cached
 from .ip_enrich import enrich_many
+from .sources.passive import gather_passive_with_status
 
 logger = logging.getLogger("recondns")
 
@@ -341,6 +342,7 @@ def snapshot_domain(
     bruteforce_depth: int = 1,
 ) -> dict[str, Any]:
     now = datetime.utcnow().isoformat() + "Z"
+    passive_subdomains, passive_errors = gather_passive_with_status(domain)
 
     # Résolveur robuste
     nameservers = []
@@ -355,6 +357,7 @@ def snapshot_domain(
     resolver = make_resolver(nameservers)
 
     # 1) DNS du domaine racine
+    # 1) DNS du domaine racine
     dns_records = {
         "A": resolve_cached(domain, "A", resolver),
         "AAAA": resolve_cached(domain, "AAAA", resolver),
@@ -363,28 +366,23 @@ def snapshot_domain(
         "MX": resolve_cached(domain, "MX", resolver),
         "TXT": resolve_cached(domain, "TXT", resolver),
     }
-    # 7) Analyse mail (SPF / DMARC / DKIM hint + MX)
+
+    # 2) Mail
     mail_security = analyze_mail_security(domain, dns_records, resolver)
-
-    from .enrich import enrich_ip
-
-    enrichment = {}
-    for ip in dns_records.get("A", []):
-        enrichment[ip] = enrich_ip(ip)
 
     crt_subs: list[str] = []
     subs_data: dict[str, dict[str, list[str]]] = {}
     takeover_checks: list[dict] = []
 
-    # 2) Signatures takeover
+    # 3) Signatures takeover
     signatures: list[dict] = []
     if check_takeover:
         signatures = load_takeover_signatures(signatures_path)
 
-    # On va construire un set global avec TOUT ce qu'on trouve (passif + bruteforce)
-    all_subdomains: set[str] = set()
+    # 4) Build surface globale
+    all_subdomains: set[str] = set(passive_subdomains)
 
-    # 3) Sources passives : crt.sh + CertSpotter + BufferOver
+    # 4.a) crt.sh
     if use_crt:
         try:
             crt_only = fetch_crtsh_subdomains(domain)
@@ -392,22 +390,7 @@ def snapshot_domain(
         except Exception as e:
             logger.warning("crt.sh failed for %s: %s", domain, e)
 
-        try:
-            from .sources import passive  # import local pour éviter cycles
-
-            all_subdomains.update(passive.certspotter(domain))
-        except Exception as e:
-            logger.warning("CertSpotter failed for %s: %s", domain, e)
-
-        try:
-            from .sources import passive
-
-            all_subdomains.update(passive.bufferover(domain))
-        except Exception:
-            # On ignore simplement si BufferOver ne répond pas
-            pass
-
-    # 4) Bruteforce léger via wordlist
+    # 4.b) Bruteforce
     if wordlist:
         try:
             bf = bruteforce_subdomains(domain, wordlist, depth=bruteforce_depth)
@@ -415,10 +398,17 @@ def snapshot_domain(
         except Exception as e:
             logger.warning("Bruteforce wordlist '%s' failed for %s: %s", wordlist, domain, e)
 
-    # Normalisation / liste finale des sous-domaines découverts
-    crt_subs = sorted({s.lower() for s in all_subdomains if isinstance(s, str) and s.strip()})
+    # Normalisation finale
+    crt_subs = sorted(
+        {
+            s.lower()
+            for s in all_subdomains
+            if isinstance(s, str) and s.strip()
+        }
+    )
 
-    # 5) Résolution A des sous-domaines (option resolve_limit)
+    # 5) Résolution des sous-domaines
+    subs_data = {}
     if crt_subs:
         if resolve_limit is not None and isinstance(resolve_limit, int):
             to_resolve = crt_subs[:resolve_limit]
@@ -426,9 +416,7 @@ def snapshot_domain(
             to_resolve = crt_subs
 
         for s in to_resolve:
-            rec = {
-                "A": resolve_cached(s, "A", resolver),
-            }
+            rec = {"A": resolve_cached(s, "A", resolver)}
             if rec.get("A"):
                 subs_data[s] = {"A": rec["A"]}
 
@@ -477,15 +465,17 @@ def snapshot_domain(
     if ip_set:
         ip_enrichment = enrich_many(sorted(ip_set))
 
-        # 8) Rapport final
-        report: dict[str, Any] = {
-            "domain": domain,
-            "timestamp": now,
-            "dns": dns_records,
-            "crt_subdomains": crt_subs,  # passif + bruteforce
-            "crt_subdomains_resolved": subs_data,  # sous-domaines avec A
-            "takeover_checks": takeover_checks,
-            "ip_enrichment": ip_enrichment,  # ASN / pays / cloud
-            "mail_security": mail_security,
-        }
+    # 8) Rapport final
+    report: dict[str, Any] = {
+        "domain": domain,
+        "timestamp": now,
+        "dns": dns_records,
+        "crt_subdomains": crt_subs,  # passif + bruteforce
+        "crt_subdomains_resolved": subs_data,  # sous-domaines avec A
+        "takeover_checks": takeover_checks,
+        "ip_enrichment": ip_enrichment,  # ASN / pays / cloud
+        "mail_security": mail_security,
+        "passive_subdomains": sorted(passive_subdomains),
+        "passive_errors": passive_errors or None,
+    }
     return report

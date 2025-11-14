@@ -94,7 +94,8 @@ def bufferover(domain: str) -> set[str]:
     try:
         resp = requests.get(url, headers=headers, timeout=15)
         if resp.status_code != 200:
-            logger.warning("BufferOver HTTP %s for %s", resp.status_code, domain)
+            # AVANT : logger.warning(...)
+            logger.debug("BufferOver HTTP %s for %s", resp.status_code, domain)
             return set()
         data = resp.json()
         candidates: set[str] = set()
@@ -114,8 +115,51 @@ def bufferover(domain: str) -> set[str]:
                     candidates.add(line.strip())
         return _dedupe_filter(candidates, domain)
     except Exception as e:
-        logger.warning("BufferOver error for %s: %s", domain, e)
+        # AVANT : logger.warning(...)
+        logger.debug("BufferOver error for %s: %s", domain, e)
         return set()
+
+def bufferover_safe(domain: str) -> tuple[set[str], str | None]:
+    """
+    Variante de Bufferover qui remonte aussi un code d'erreur symbolique.
+
+    Retourne (subdomains, error_code):
+      - subdomains : set[str] (éventuellement vide)
+      - error_code : None si OK, sinon "http_error" / "network_error" / "parse_error"
+    """
+    url = f"https://dns.bufferover.run/dns?q=.{domain}"
+    headers = {"User-Agent": USER_AGENT}
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+    except requests.exceptions.RequestException as e:
+        logger.debug("BufferOver network error for %s: %s", domain, e)
+        return set(), "network_error"
+
+    if resp.status_code != 200:
+        logger.debug("BufferOver HTTP %s for %s", resp.status_code, domain)
+        return set(), "http_error"
+
+    try:
+        data = resp.json()
+    except ValueError as e:
+        logger.debug("BufferOver JSON parse error for %s: %s", domain, e)
+        return set(), "parse_error"
+
+    candidates: set[str] = set()
+    for key in ("FDNS_A", "FDNS_CNAME"):
+        entries = data.get(key) or []
+        for line in entries:
+            if not isinstance(line, str):
+                continue
+            parts = line.split(",")
+            if len(parts) == 2:
+                host = parts[1].strip()
+                candidates.add(host)
+            else:
+                candidates.add(line.strip())
+
+    return _dedupe_filter(candidates, domain), None
 
 
 # ------------------ HackerTarget (fallback léger) ------------------
@@ -160,23 +204,60 @@ def gather_passive(
     sources: list[Callable[[str], set[str]]] | None = None,
 ) -> set[str]:
     """
-    Combine plusieurs sources passives en un seul set de sous-domaines.
-    Par défaut : CertSpotter + BufferOver + HackerTarget.
+    Version historique : ne retourne que les sous-domaines.
+    Pour la nouvelle V1 enrichie, préfère gather_passive_with_status().
     """
-    if sources is None:
-        sources = [certspotter, bufferover, hackertarget]
+    subs, _ = gather_passive_with_status(domain)
+    return subs
 
+
+__all__ = [
+    "certspotter",
+    "bufferover",
+    "bufferover_safe",
+    "hackertarget",
+    "gather_passive",
+    "gather_passive_with_status",
+]
+
+def gather_passive_with_status(domain: str) -> tuple[set[str], dict[str, str]]:
+    """
+    Combine plusieurs sources passives et remonte aussi un statut par source.
+
+    Retourne (subdomains, errors) :
+      - subdomains : set[str]
+      - errors     : dict[source_name -> error_code]
+                     ex: {"bufferover": "network_error"}
+    """
     all_names: set[str] = set()
-    for fn in sources:
-        try:
-            subnames = fn(domain)
-            if subnames:
-                logger.info("[passive] %s -> %d sous-domaines", fn.__name__, len(subnames))
-            all_names.update(subnames)
-        except Exception as e:
-            logger.warning("Passive source %s failed for %s: %s", fn.__name__, domain, e)
+    errors: dict[str, str] = {}
 
-    return _dedupe_filter(all_names, domain)
+    # 1) CertSpotter (on garde la fonction telle quelle)
+    try:
+        cs_subs = certspotter(domain)
+        if cs_subs:
+            logger.info("[passive] certspotter -> %d sous-domaines", len(cs_subs))
+        all_names.update(cs_subs)
+    except Exception as e:
+        logger.debug("CertSpotter error for %s: %s", domain, e)
+        errors["certspotter"] = "error"
 
+    # 2) BufferOver (safe)
+    bo_subs, bo_err = bufferover_safe(domain)
+    if bo_subs:
+        logger.info("[passive] bufferover -> %d sous-domaines", len(bo_subs))
+    all_names.update(bo_subs)
+    if bo_err:
+        errors["bufferover"] = bo_err
 
-__all__ = ["certspotter", "bufferover", "hackertarget", "gather_passive"]
+    # 3) HackerTarget (comme avant, mais catch global)
+    try:
+        ht_subs = hackertarget(domain)
+        if ht_subs:
+            logger.info("[passive] hackertarget -> %d sous-domaines", len(ht_subs))
+        all_names.update(ht_subs)
+    except Exception as e:
+        logger.debug("HackerTarget error for %s: %s", domain, e)
+        errors["hackertarget"] = "error"
+
+    return _dedupe_filter(all_names, domain), errors
