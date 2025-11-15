@@ -1,4 +1,4 @@
-# 🔍 RECONDNS by guepster — Documentation Technique
+# RECONDNS by guepster — Documentation Technique
 
 **Guide Technique Complet / Features / Flags / Data Model**
 
@@ -6,7 +6,7 @@ Version - V1.0
 
 ---
 
-## 📘 Introduction
+## Introduction
 
 **RECONDNS** est un outil de reconnaissance DNS & Web avancé permettant de :
 
@@ -23,7 +23,7 @@ Version - V1.0
 
 ---
 
-## 🏗️ Architecture générale
+## Architecture générale
 
 ```
 src/recondns/
@@ -44,9 +44,9 @@ src/recondns/
 
 ---
 
-## ⚙️ Fonctionnalités principales
+## Fonctionnalités principales
 
-### 🌐 **Passive DNS Enumeration**
+### **Passive DNS Enumeration**
 
 **Sources :**
 
@@ -66,7 +66,7 @@ src/recondns/
 
 ---
 
-### 🔎 **Résolution DNS complète**
+### **Résolution DNS complète**
 
 **Types supportés :** A, AAAA, MX, NS, TXT, CNAME
 
@@ -90,7 +90,7 @@ src/recondns/
 
 ---
 
-### 🔨 **Bruteforce de sous-domaines**
+### **Bruteforce de sous-domaines**
 
 **Options :**
 
@@ -112,7 +112,7 @@ src/recondns/
 
 ---
 
-### 🏷️ **Classification automatique des sous-domaines**
+### **Classification automatique des sous-domaines**
 
 **Catégories détectées :**
 
@@ -136,7 +136,7 @@ cdn, static
 
 ---
 
-### 🌍 **Enrichissement IP (WHOIS / ASN / Cloud)**
+### **Enrichissement IP (WHOIS / ASN / Cloud)**
 
 **Supports :**
 
@@ -162,7 +162,7 @@ cdn, static
 
 ---
 
-### 📧 **Posture mail (SPF, DKIM, DMARC)**
+### **Posture mail (SPF, DKIM, DMARC)**
 
 **Sortie :**
 
@@ -179,7 +179,7 @@ cdn, static
 
 ---
 
-### 🌐 **Web Scan (HTTP/HTTPS + Sécurité)**
+### **Web Scan (HTTP/HTTPS + Sécurité)**
 
 **Activé via :**
 
@@ -226,7 +226,7 @@ cdn, static
 
 ---
 
-### 🚨 **Subdomain Takeover Detection**
+### **Subdomain Takeover Detection**
 
 **Activé via :**
 
@@ -253,18 +253,18 @@ cdn, static
 
 ---
 
-### 🎯 **Findings automatiques**
+### **Findings automatiques**
 
 **Exemples :**
 
-- ⚠️ Mail protégé par SPF + DMARC
-- ⚠️ Aucun HSTS détecté
-- ⚠️ Multi-cloud détecté
-- ⚠️ DKIM absent
+- /!\ Mail protégé par SPF + DMARC
+- /!\ Aucun HSTS détecté
+- /!\ Multi-cloud détecté
+- /!\ DKIM absent
 
 ---
 
-### 👥 **Next Steps par équipe**
+### **Next Steps par équipe**
 
 **Teams :**
 
@@ -285,7 +285,7 @@ cdn, static
 
 ---
 
-### 📊 **Risk Score**
+### **Risk Score**
 
 **Barème basé sur :**
 
@@ -305,7 +305,7 @@ Medium       : Medium
 
 ---
 
-## 🖥️ **Commandes CLI**
+## **Commandes CLI**
 
 ### Commande principale
 
@@ -339,7 +339,7 @@ recondns info <domain> [options]
 
 ---
 
-## 📄 **Format JSON complet du rapport**
+## **Format JSON complet du rapport**
 
 ```json
 {
@@ -369,7 +369,7 @@ recondns info <domain> [options]
 
 ---
 
-## 🔧 **Cas d'usage avancés**
+## **Cas d'usage avancés**
 
 ### Audit complet
 
@@ -391,7 +391,7 @@ recondns info site.com --web-scan
 
 ---
 
-## 🛠️ **Dev — Étendre RECONDNS**
+## **Dev — Étendre RECONDNS**
 
 ### Ajouter une source passive
 
@@ -411,7 +411,7 @@ recondns info site.com --web-scan
 
 ---
 
-## ⚠️ **Disclaimer**
+## /!\ **Disclaimer** /!\
 
 Cet outil est destiné **exclusivement** :
 
@@ -423,7 +423,7 @@ Toute utilisation non autorisée est strictement interdite.
 
 ---
 
-## 👤 **Auteur**
+## **Auteur**
 
 **Guepster**  
 Cybersecurity • OSINT • Recon Engineering
@@ -432,4 +432,4 @@ GitHub : https://github.com/guepster »
 
 ---
 
-**🔍 RECONDNS — Reconnaissance DNS & Web pour audits de sécurité avancés**
+**RECONDNS by guepster — Reconnaissance DNS & Web pour audits de sécurité avancés**
