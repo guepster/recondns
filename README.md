@@ -4,7 +4,7 @@
 
 ---
 
-## 🧠 TL;DR
+## TL;DR
 
 ```bash
 # Scan rapide (DNS + passif + bruteforce léger + mail)
@@ -30,7 +30,7 @@ recondns diff-json example.com --md
 
 ---
 
-## ✨ Features principales
+## Features principales
 
 * **Découverte DNS complète**
 
@@ -75,7 +75,7 @@ recondns diff-json example.com --md
 
 ---
 
-## 🛠 Installation
+## Installation
 
 ### 1. Cloner le repo
 
@@ -102,7 +102,7 @@ recondns
 
 ---
 
-## 🧩 Architecture générale
+## Architecture générale
 
 RECONDNS repose sur quelques blocs principaux :
 
@@ -117,7 +117,7 @@ RECONDNS repose sur quelques blocs principaux :
 
 ---
 
-## 🚀 Commandes & usage détaillé
+## Commandes & usage détaillé
 
 ### 1. `info` — vue complète en console
 
@@ -478,7 +478,7 @@ Pratique pour enchaîner les analyses sans retaper `recondns` à chaque fois.
 
 ---
 
-## 📊 Modèle de risque
+## Modèle de risque
 
 Le score est calculé par `compute_risk_score()` à partir de :
 
@@ -509,7 +509,7 @@ Niveaux :
 
 ---
 
-## 🧱 Catégorisation des sous-domaines
+## Catégorisation des sous-domaines
 
 La fonction `categorize_subdomain()` applique des tags en fonction du nom :
 
@@ -533,7 +533,7 @@ Ces tags sont ensuite utilisés pour :
 
 ---
 
-## ⚖️ Usage responsable
+## Usage responsable
 
 RECONDNS est un outil de **reconnaissance**.
 Tu es responsable de l’usage que tu en fais.
@@ -563,7 +563,7 @@ RECONDNS ne cherche pas à remplacer Amass/Subfinder/etc., mais à proposer :
 
 ---
 
-## ✅ Statut de la version
+## Statut de la version
 
 Cette version correspond à la **V1 publique** avec :
 
@@ -583,7 +583,7 @@ Les évolutions possibles (roadmap perso) :
 
 ---
 
-## 🤝 Crédits / Contribuer
+## Crédits / Contribuer
 
 * Conception & dev : **Guepster / RECONDNS**
 * Feedbacks, bug reports et idées bienvenus via issues / PR.
@@ -604,7 +604,3 @@ Si tu veux proposer une nouvelle feature :
 ---
 
 **Bon recon.** 🛰
-
-```
-::contentReference[oaicite:0]{index=0}
-```
