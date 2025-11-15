@@ -489,4 +489,3 @@ def snapshot_domain(
         report["web"] = {"hosts": web_hosts}
 
     return report
-

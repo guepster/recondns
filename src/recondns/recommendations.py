@@ -98,6 +98,7 @@ def build_next_steps(report: Dict[str, Any]) -> Dict[str, List[str]]:
 # Helpers sur le report
 # -----------------------
 
+
 def _get_web_hosts(report: Dict[str, Any]) -> Dict[str, Any]:
     return (report.get("web") or {}).get("hosts") or {}
 
@@ -116,7 +117,7 @@ def _web_security_stats(report: Dict[str, Any]) -> Dict[str, int]:
     }
     for data in hosts.values():
         http = (data or {}).get("http") or {}
-        sec = (http.get("security_headers") or {})
+        sec = http.get("security_headers") or {}
         if sec.get("hsts"):
             stats["hsts"] += 1
         if sec.get("content_security_policy"):
@@ -130,6 +131,7 @@ def _web_security_stats(report: Dict[str, Any]) -> Dict[str, int]:
         if sec.get("permissions_policy"):
             stats["ppol"] += 1
     return stats
+
 
 def _get_dns(report: Dict[str, Any]) -> Dict[str, List[str]]:
     return report.get("dns") or {}

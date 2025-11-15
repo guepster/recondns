@@ -89,8 +89,8 @@ def scan_web_host(host: str, timeout: float = DEFAULT_HTTP_TIMEOUT) -> Dict[str,
         http_info["status"] = status_http
         http_info["title"] = _extract_title(body_http)
         http_info["server"] = headers_http.get("Server") or headers_http.get("server")
-        http_info["powered_by"] = (
-            headers_http.get("X-Powered-By") or headers_http.get("x-powered-by")
+        http_info["powered_by"] = headers_http.get("X-Powered-By") or headers_http.get(
+            "x-powered-by"
         )
         http_info["tech"] = _detect_tech(headers_http, body_http)
 
@@ -100,10 +100,7 @@ def scan_web_host(host: str, timeout: float = DEFAULT_HTTP_TIMEOUT) -> Dict[str,
             redirect_to_https = True
 
         # HSTS ?
-        hsts = any(
-            h.lower() == "strict-transport-security"
-            for h in headers_http.keys()
-        )
+        hsts = any(h.lower() == "strict-transport-security" for h in headers_http.keys())
     else:
         ports[80] = "closed"
 
@@ -117,17 +114,15 @@ def scan_web_host(host: str, timeout: float = DEFAULT_HTTP_TIMEOUT) -> Dict[str,
             http_info["status"] = status_https
             http_info["title"] = _extract_title(body_https)
             http_info["server"] = headers_https.get("Server") or headers_https.get("server")
-            http_info["powered_by"] = (
-                headers_https.get("X-Powered-By") or headers_https.get("x-powered-by")
+            http_info["powered_by"] = headers_https.get("X-Powered-By") or headers_https.get(
+                "x-powered-by"
             )
             http_info["tech"] = _detect_tech(headers_https, body_https)
         else:
             # on merge juste les technos détectées sur HTTPS
             extra_tech = _detect_tech(headers_https, body_https)
             if extra_tech:
-                http_info["tech"] = sorted(
-                    set((http_info.get("tech") or []) + extra_tech)
-                )
+                http_info["tech"] = sorted(set((http_info.get("tech") or []) + extra_tech))
 
         # HSTS sur HTTPS aussi ?
         if any(h.lower() == "strict-transport-security" for h in headers_https.keys()):

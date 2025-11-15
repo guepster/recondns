@@ -368,7 +368,9 @@ def snapshot(
 
     return
 
-#-------INFO-------
+
+# -------INFO-------
+
 
 @main.command()
 @click.argument("domain")
@@ -478,7 +480,6 @@ def info(
     takeovers = report.get("takeover_checks") or []
     ip_enrich = report.get("ip_enrichment") or {}
     mail_sec = report.get("mail_security") or {}
-
 
     # --- Calculs surface globale ---
     total_subdomains = len(crt_subs)
@@ -720,7 +721,6 @@ def info(
             click.echo(f"    └─ Cloud   : {cloud_txt}")
         click.echo("")
 
-
     # ---------- PROVIDERS / HOSTING ----------
     if ip_enrich:
         # mapping (asn, org, cloud) -> {ips, subs}
@@ -921,7 +921,6 @@ def info(
             )
             click.echo("")
 
-
     # ---------- MAIL SECURITY ----------
     mail_sec = report.get("mail_security") or {}
     click.echo(title("[ MAIL SECURITY ]"))
@@ -941,8 +940,7 @@ def info(
         click.echo(f"  DKIM (hint)  : " f"{warn('⚠ hint présent dans TXT (à confirmer)')}")
     else:
         click.echo(
-            f"  DKIM (hint)  : "
-            f"{warn('⚠ aucun hint détecté (peut quand même être configuré)')}"
+            f"  DKIM (hint)  : " f"{warn('⚠ aucun hint détecté (peut quand même être configuré)')}"
         )
     click.echo("")
 
@@ -963,9 +961,7 @@ def info(
 
     # IP / clouds / pays
     if countries and len(countries) > 1:
-        findings.append(
-            "⚠ Hébergement multi-pays : vérifier les contraintes légales/compliance."
-        )
+        findings.append("⚠ Hébergement multi-pays : vérifier les contraintes légales/compliance.")
     if clouds and len(clouds) > 1:
         findings.append(
             "⚠ Multiples clouds publics détectés : surface hybride potentiellement complexe."
@@ -979,9 +975,7 @@ def info(
     else:
         findings.append("⚠ SPF/DMARC incomplets : risque de spoofing significatif.")
     if not has_dkim:
-        findings.append(
-            "⚠ DKIM non détecté : à prévoir pour renforcer l'authenticité des mails."
-        )
+        findings.append("⚠ DKIM non détecté : à prévoir pour renforcer l'authenticité des mails.")
 
     # Web / headers de sécurité
     if web_hosts:
@@ -990,7 +984,7 @@ def info(
             hsts = csp = xfo = 0
             for data in web_hosts.values():
                 http = (data or {}).get("http") or {}
-                sec = (http.get("security_headers") or {})
+                sec = http.get("security_headers") or {}
                 if sec.get("hsts"):
                     hsts += 1
                 if sec.get("content_security_policy"):
@@ -1064,7 +1058,6 @@ def info(
         click.echo(f"  • DKIM              : {warn('à vérifier / configurer si besoin')}")
     click.echo("")
 
-
     # ---- Export JSON optionnel ----
     if outfile:
         import json
@@ -1072,7 +1065,6 @@ def info(
         with open(outfile, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
         click.echo(f"JSON écrit dans {outfile}")
-
 
 
 # ---------- HISTORY ----------
