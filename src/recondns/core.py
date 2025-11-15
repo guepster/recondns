@@ -395,9 +395,7 @@ def snapshot_domain(
             logger.warning("Bruteforce wordlist '%s' failed for %s: %s", wordlist, domain, e)
 
     # Normalisation finale
-    crt_subs = sorted(
-        {s.lower() for s in all_subdomains if isinstance(s, str) and s.strip()}
-    )
+    crt_subs = sorted({s.lower() for s in all_subdomains if isinstance(s, str) and s.strip()})
 
     # 5) Résolution des sous-domaines
     subs_data = {}
@@ -425,9 +423,7 @@ def snapshot_domain(
         for s in subs_data.keys():
             hosts_to_check.add(s)
 
-        hosts_list = [
-            h for h in sorted(hosts_to_check) if any(ch.isalpha() for ch in h)
-        ]
+        hosts_list = [h for h in sorted(hosts_to_check) if any(ch.isalpha() for ch in h)]
 
         if takeover_verbose:
             logger.info(
@@ -460,28 +456,20 @@ def snapshot_domain(
     if ip_set:
         ip_enrichment = enrich_many(sorted(ip_set))
 
-    # 7.bis) WEB SCAN (HTTP/HTTPS) 👇
-    web_section: dict[str, Any] = {}
+    # --- WEB SCAN optionnel ---
+    web_hosts: dict[str, Any] = {}
     if web_scan:
-        from .webscan import scan_web_host  # 👈 à créer dans webscan.py
+        from .webscan import scan_web_host  # import local pour éviter les cycles
 
-        web_hosts: dict[str, Any] = {}
+        targets: set[str] = set()
+        targets.add(domain)
+        targets.update(subs_data.keys())  # les sous-domaines résolus
 
-        # Sous-domaines résolus
-        for hostname, rec in subs_data.items():
-            ips = rec.get("A") or []
-            if not ips:
-                continue
-            target_ip = ips[0]
-            web_hosts[hostname] = scan_web_host(hostname, target_ip)
-
-        # Domaine racine
-        root_ips = dns_records.get("A") or []
-        if root_ips:
-            web_hosts[domain] = scan_web_host(domain, root_ips[0])
-
-        if web_hosts:
-            web_section = {"hosts": web_hosts}
+        for host in sorted(targets):
+            try:
+                web_hosts[host] = scan_web_host(host)
+            except Exception as e:
+                logger.debug("webscan failed for %s: %s", host, e)
 
     # 8) Rapport final
     report: dict[str, Any] = {
@@ -497,8 +485,8 @@ def snapshot_domain(
         "passive_errors": passive_errors or None,
     }
 
-    # On n’ajoute "web" que si web_scan était activé et qu’on a des données
-    if web_section:
-        report["web"] = web_section
+    if web_hosts:
+        report["web"] = {"hosts": web_hosts}
 
     return report
+

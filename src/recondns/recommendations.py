@@ -98,6 +98,38 @@ def build_next_steps(report: Dict[str, Any]) -> Dict[str, List[str]]:
 # Helpers sur le report
 # -----------------------
 
+def _get_web_hosts(report: Dict[str, Any]) -> Dict[str, Any]:
+    return (report.get("web") or {}).get("hosts") or {}
+
+
+def _web_security_stats(report: Dict[str, Any]) -> Dict[str, int]:
+    hosts = _get_web_hosts(report)
+    total = len(hosts)
+    stats = {
+        "total": total,
+        "hsts": 0,
+        "csp": 0,
+        "xfo": 0,
+        "xcto": 0,
+        "refpol": 0,
+        "ppol": 0,
+    }
+    for data in hosts.values():
+        http = (data or {}).get("http") or {}
+        sec = (http.get("security_headers") or {})
+        if sec.get("hsts"):
+            stats["hsts"] += 1
+        if sec.get("content_security_policy"):
+            stats["csp"] += 1
+        if sec.get("x_frame_options"):
+            stats["xfo"] += 1
+        if sec.get("x_content_type_options"):
+            stats["xcto"] += 1
+        if sec.get("referrer_policy"):
+            stats["refpol"] += 1
+        if sec.get("permissions_policy"):
+            stats["ppol"] += 1
+    return stats
 
 def _get_dns(report: Dict[str, Any]) -> Dict[str, List[str]]:
     return report.get("dns") or {}
@@ -542,6 +574,39 @@ _register_rule(
     text="Environnements demo/beta détectés : vérifier qu’ils ne contiennent pas de données sensibles ou de fonctionnalités non stabilisées.",
     condition=lambda r: len(_match_subdomains(r, ["demo", "beta"])) > 0,
 )
+
+
+# ===========================
+#  RÈGLES WEB / HEADERS HTTP
+# ===========================
+
+_register_rule(
+    id="web_no_hsts",
+    category="web",
+    team="BLUE",
+    severity="medium",
+    text="Aucun HSTS sur les frontaux web : activer Strict-Transport-Security pour forcer l'usage de HTTPS.",
+    condition=lambda r: (lambda s: s["total"] >= 1 and s["hsts"] == 0)(_web_security_stats(r)),
+)
+
+_register_rule(
+    id="web_no_csp",
+    category="web",
+    team="DEV",
+    severity="medium",
+    text="Aucune Content-Security-Policy détectée : définir des CSP sur les applications web critiques pour limiter la surface XSS.",
+    condition=lambda r: (lambda s: s["total"] >= 3 and s["csp"] == 0)(_web_security_stats(r)),
+)
+
+_register_rule(
+    id="web_no_xfo",
+    category="web",
+    team="BLUE",
+    severity="low",
+    text="X-Frame-Options absent sur la majorité des hôtes : envisager son activation pour réduire les risques de clickjacking.",
+    condition=lambda r: (lambda s: s["total"] >= 3 and s["xfo"] == 0)(_web_security_stats(r)),
+)
+
 
 # ===========================
 #  RÈGLES TAKEOVER

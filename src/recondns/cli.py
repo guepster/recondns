@@ -256,7 +256,6 @@ def console():
     default=False,
     help="Scan HTTP/HTTPS basique sur le domaine et les sous-domaines résolus.",
 )
-
 def snapshot(
     domain,
     out,
@@ -274,7 +273,7 @@ def snapshot(
     wordlist,
     bruteforce_depth,
     db,
-    web_scan
+    web_scan,
 ):
     """
     Prend un snapshot complet (DNS + passif + bruteforce + takeover) pour DOMAIN.
@@ -369,8 +368,8 @@ def snapshot(
 
     return
 
+#-------INFO-------
 
-# ---------- INFO ----------
 @main.command()
 @click.argument("domain")
 @click.option(
@@ -446,7 +445,7 @@ def info(
     outfile,
     provider_filter,
     minimal,
-    web_scan
+    web_scan,
 ):
     """Affiche un résumé en console (A / NS / MX counts + découverte passive/bruteforce)."""
 
@@ -469,7 +468,7 @@ def info(
         takeover_verbose=takeover_verbose,
         wordlist=wordlist,
         bruteforce_depth=bruteforce_depth,
-        web_scan=web_scan
+        web_scan=web_scan,
     )
 
     # --- Extraction des données de base ---
@@ -479,6 +478,7 @@ def info(
     takeovers = report.get("takeover_checks") or []
     ip_enrich = report.get("ip_enrichment") or {}
     mail_sec = report.get("mail_security") or {}
+
 
     # --- Calculs surface globale ---
     total_subdomains = len(crt_subs)
@@ -720,16 +720,6 @@ def info(
             click.echo(f"    └─ Cloud   : {cloud_txt}")
         click.echo("")
 
-    if report.get("web"):
-        click.echo(title("[ IP ENRICHMENT ]"))
-        for host, data in report["web"].items():
-            status = data["http"].get("status", "?")
-            page_title = data["http"].get("title", "")
-            tech = ", ".join(data["http"].get("tech", []))
-
-            print(f"  • {host} → {status} {page_title} ({tech})")
-        click.echo("")
-
 
     # ---------- PROVIDERS / HOSTING ----------
     if ip_enrich:
@@ -788,123 +778,292 @@ def info(
                     click.echo(f"    • Subdomains   : {', '.join(samples)}")
                 click.echo("")
 
-    # ---------- MAIL SECURITY ----------
-    mail_sec = report.get("mail_security") or {}
-    if mail_sec:
-        click.echo(title("[ MAIL SECURITY ]"))
-        mx_hosts = mail_sec.get("mx_hosts") or []
-        if mx_hosts:
-            click.echo(f"  MX hosts     : {', '.join(mx_hosts)}")
-        else:
-            click.echo("  MX hosts     : (aucun)")
+    # ---------- WEB DETAILS ----------
+    web_hosts = (report.get("web") or {}).get("hosts") or {}
+    if web_hosts:
+        click.echo(title("[ WEB DETAILS ]"))
 
-        has_spf = mail_sec.get("has_spf")
-        has_dmarc = mail_sec.get("has_dmarc")
-        has_dkim = mail_sec.get("has_dkim_hint")
+        def score_host(item):
+            host, data = item
+            tags = categorize_subdomain(host)
+            score = 0
+            if "admin" in tags:
+                score += 3
+            if "login" in tags or "auth" in tags:
+                score += 2
+            if "staging" in tags or "dev" in tags:
+                score += 1
+            return (-score, host)  # tri desc sur score, puis alpha
 
-        click.echo(f"  SPF          : " f"{ok('✅ OK') if has_spf else bad('❌ absent')}")
-        click.echo(f"  DMARC        : " f"{ok('✅ OK') if has_dmarc else bad('❌ absent')}")
-        if has_dkim:
-            click.echo(f"  DKIM (hint)  : " f"{warn('⚠ hint présent dans TXT (à confirmer)')}")
-        else:
+        for host, data in sorted(web_hosts.items(), key=score_host):
+            http = data.get("http") or {}
+            status = http.get("status", "?")
+            page_title = http.get("title") or ""
+            tech = ", ".join(http.get("tech") or [])
+            click.echo(f"  • {host} → {status} {page_title} ({tech})")
+        click.echo("")
+
+    # ---------- WEB SUMMARY ----------
+    web = web_hosts
+    if web:
+        click.echo(title("[ WEB SUMMARY ]"))
+
+        total_hosts = len(web)
+        up_hosts = 0
+        code_counts: dict[int, int] = {}
+        tech_set: set[str] = set()
+        open_80 = 0
+        open_443 = 0
+
+        # stats headers de sécu
+        sec_counts = {
+            "hsts": 0,
+            "csp": 0,
+            "xfo": 0,
+            "xcto": 0,
+            "refpol": 0,
+            "ppol": 0,
+        }
+
+        admin_hosts = 0
+        staging_hosts = 0
+
+        for host, data in web.items():
+            ports = data.get("ports") or {}
+            if ports.get(80) == "open":
+                open_80 += 1
+            if ports.get(443) == "open":
+                open_443 += 1
+
+            http = data.get("http") or {}
+            status = http.get("status")
+            if isinstance(status, int):
+                up_hosts += 1
+                code_counts[status] = code_counts.get(status, 0) + 1
+
+            for t in http.get("tech") or []:
+                tech_set.add(t)
+
+            # Headers de sécu
+            sec = http.get("security_headers") or {}
+            if sec.get("hsts"):
+                sec_counts["hsts"] += 1
+            if sec.get("content_security_policy"):
+                sec_counts["csp"] += 1
+            if sec.get("x_frame_options"):
+                sec_counts["xfo"] += 1
+            if sec.get("x_content_type_options"):
+                sec_counts["xcto"] += 1
+            if sec.get("referrer_policy"):
+                sec_counts["refpol"] += 1
+            if sec.get("permissions_policy"):
+                sec_counts["ppol"] += 1
+
+            # Vue fonctionnelle simple
+            host_low = host.lower()
+            if any(k in host_low for k in ["admin", "adm", "backoffice"]):
+                admin_hosts += 1
+            if any(k in host_low for k in ["staging", "preprod", "test"]):
+                staging_hosts += 1
+
+        click.echo(f"  Hosts testés HTTP(S) : {total_hosts}")
+        click.echo(f"  Hosts répondant      : {up_hosts}")
+        click.echo(f"  Port 80 ouvert sur   : {open_80} hôtes")
+        click.echo(f"  Port 443 ouvert sur  : {open_443} hôtes")
+
+        # Répartition HTTP/HTTPS
+        http_only = 0
+        https_only = 0
+        both = 0
+        for data in web.values():
+            p = data.get("ports") or {}
+            is80 = p.get(80) == "open"
+            is443 = p.get(443) == "open"
+            if is80 and is443:
+                both += 1
+            elif is80:
+                http_only += 1
+            elif is443:
+                https_only += 1
+
+        click.echo(f"  HTTP only            : {http_only} hôtes")
+        click.echo(f"  HTTPS only           : {https_only} hôtes")
+        click.echo(f"  HTTP + HTTPS         : {both} hôtes")
+
+        # Petites stats headers de sécu
+        click.echo(
+            "  Security headers     : "
+            f"HSTS({sec_counts['hsts']}), "
+            f"CSP({sec_counts['csp']}), "
+            f"XFO({sec_counts['xfo']}), "
+            f"X-Content-Type-Options({sec_counts['xcto']}), "
+            f"Referrer-Policy({sec_counts['refpol']}), "
+            f"Permissions-Policy({sec_counts['ppol']})"
+        )
+
+        if code_counts:
+            parts = [f"{code}×{count}" for code, count in sorted(code_counts.items())]
+            click.echo(f"  Codes HTTP           : {', '.join(parts)}")
+
+        if tech_set:
+            click.echo(f"  Stacks détectées     : {', '.join(sorted(tech_set))}")
+
+        click.echo("")
+        click.echo("  Vue fonctionnelle :")
+        click.echo(f"    • Hôtes admin     : {admin_hosts}")
+        click.echo(f"    • Hôtes staging   : {staging_hosts}")
+        click.echo("")
+        # ➕ Résumé lisible
+        if up_hosts:
             click.echo(
-                f"  DKIM (hint)  : "
-                f"{warn('⚠ aucun hint détecté (peut quand même être configuré)')}"
+                f"  → {up_hosts}/{total_hosts} hôtes répondent en HTTPS avec "
+                f"{', '.join(sorted(tech_set)) or 'stacks web diverses'}."
             )
-        click.echo("")
-
-        # =========================
-        #  SECTION : FINDINGS
-        # =========================
-        findings: list[str] = []
-
-        # Surface DNS
-        if total_subdomains <= 5:
-            findings.append("✔ Surface DNS très limitée (peu de sous-domaines exposés).")
-        elif total_subdomains <= 50:
-            findings.append("✔ Surface DNS modérée (enr. gérables mais à surveiller).")
-        else:
-            findings.append(
-                "⚠ Surface DNS large : prioriser l'inventaire & la réduction de la surface."
-            )
-
-        # IP / clouds / pays
-        if countries and len(countries) > 1:
-            findings.append(
-                "⚠ Hébergement multi-pays : vérifier les contraintes légales/compliance."
-            )
-        if clouds and len(clouds) > 1:
-            findings.append(
-                "⚠ Multiples clouds publics détectés : surface hybride potentiellement complexe."
-            )
-        elif clouds:
-            findings.append("✔ Usage d'un cloud public unique (surface plus prévisible).")
-
-        # Mail
-        if mail_sec:
-            has_spf = mail_sec.get("has_spf")
-            has_dmarc = mail_sec.get("has_dmarc")
-            has_dkim = mail_sec.get("has_dkim_hint")
-
-            if has_spf and has_dmarc:
-                findings.append("✔ Mail protégé par SPF + DMARC (bonne base anti-spoofing).")
-            else:
-                findings.append("⚠ SPF/DMARC incomplets : risque de spoofing significatif.")
-            if not has_dkim:
-                findings.append(
-                    "⚠ DKIM non détecté : à prévoir pour renforcer l'authenticité des mails."
-                )
-        else:
-            findings.append(
-                "⚠ Aucune info mail analysée : MX/SPF/DMARC non présents ou non résolus."
-            )
-
-        click.echo(title("[ FINDINGS ]"))
-        for f in findings:
-            click.echo(f"  • {f}")
-        click.echo("")
-
-        # =========================
-        #  SECTION : NEXT STEPS
-        # =========================
-        steps_by_team = build_next_steps(report)
-
-        for team, items in steps_by_team.items():
-            if not items:
-                continue
-            click.echo(title(f"[ NEXT STEPS — {team} TEAM ]"))
-            for s in items:
-                click.echo(f"  • {s}")
             click.echo("")
 
-        # ---------- RISK SCORE ----------
-        score, level = compute_risk_score(
-            total_subdomains=total_subdomains,
-            clouds=clouds,
-            mail_sec=mail_sec,
-            takeover_count=len(takeovers),
+
+    # ---------- MAIL SECURITY ----------
+    mail_sec = report.get("mail_security") or {}
+    click.echo(title("[ MAIL SECURITY ]"))
+    mx_hosts = mail_sec.get("mx_hosts") or []
+    if mx_hosts:
+        click.echo(f"  MX hosts     : {', '.join(mx_hosts)}")
+    else:
+        click.echo("  MX hosts     : (aucun)")
+
+    has_spf = mail_sec.get("has_spf")
+    has_dmarc = mail_sec.get("has_dmarc")
+    has_dkim = mail_sec.get("has_dkim_hint")
+
+    click.echo(f"  SPF          : " f"{ok('✅ OK') if has_spf else bad('❌ absent')}")
+    click.echo(f"  DMARC        : " f"{ok('✅ OK') if has_dmarc else bad('❌ absent')}")
+    if has_dkim:
+        click.echo(f"  DKIM (hint)  : " f"{warn('⚠ hint présent dans TXT (à confirmer)')}")
+    else:
+        click.echo(
+            f"  DKIM (hint)  : "
+            f"{warn('⚠ aucun hint détecté (peut quand même être configuré)')}"
         )
-        click.echo("")
-        click.echo(title("[ RISK SCORE ]"))
-        click.echo(f"  Global score   : {score} / 100")
-        click.echo(f"  Niveau         : {level}")
+    click.echo("")
+
+    # =========================
+    #  SECTION : FINDINGS
+    # =========================
+    findings: list[str] = []
+
+    # Surface DNS
+    if total_subdomains <= 5:
+        findings.append("✔ Surface DNS très limitée (peu de sous-domaines exposés).")
+    elif total_subdomains <= 20:
+        findings.append("✔ Surface DNS modérée (surface maîtrisable mais à surveiller).")
+    else:
+        findings.append(
+            "⚠ Surface DNS large : prioriser l'inventaire & la réduction de la surface."
+        )
+
+    # IP / clouds / pays
+    if countries and len(countries) > 1:
+        findings.append(
+            "⚠ Hébergement multi-pays : vérifier les contraintes légales/compliance."
+        )
+    if clouds and len(clouds) > 1:
+        findings.append(
+            "⚠ Multiples clouds publics détectés : surface hybride potentiellement complexe."
+        )
+    elif clouds:
+        findings.append("✔ Usage d'un cloud public unique (surface plus prévisible).")
+
+    # Mail
+    if has_spf and has_dmarc:
+        findings.append("✔ Mail protégé par SPF + DMARC (bonne base anti-spoofing).")
+    else:
+        findings.append("⚠ SPF/DMARC incomplets : risque de spoofing significatif.")
+    if not has_dkim:
+        findings.append(
+            "⚠ DKIM non détecté : à prévoir pour renforcer l'authenticité des mails."
+        )
+
+    # Web / headers de sécurité
+    if web_hosts:
+        total_web = len(web_hosts)
+        if total_web >= 3:
+            hsts = csp = xfo = 0
+            for data in web_hosts.values():
+                http = (data or {}).get("http") or {}
+                sec = (http.get("security_headers") or {})
+                if sec.get("hsts"):
+                    hsts += 1
+                if sec.get("content_security_policy"):
+                    csp += 1
+                if sec.get("x_frame_options"):
+                    xfo += 1
+
+            if hsts == 0:
+                findings.append(
+                    "⚠ Aucun HSTS détecté sur les frontaux web : activer Strict-Transport-Security pour forcer l'usage de HTTPS."
+                )
+            if csp == 0:
+                findings.append(
+                    "⚠ Aucune Content-Security-Policy détectée : définir des CSP pour réduire les risques de XSS et d'injections côté client."
+                )
+            if xfo == 0:
+                findings.append(
+                    "⚠ X-Frame-Options absent : risque potentiel de clickjacking si les pages peuvent être intégrées dans des iframes."
+                )
+
+    click.echo(title("[ FINDINGS ]"))
+    for f in findings:
+        click.echo(f"  • {f}")
+    click.echo("")
+
+    # =========================
+    #  SECTION : NEXT STEPS
+    # =========================
+    steps_by_team = build_next_steps(report)
+
+    for team, items in steps_by_team.items():
+        if not items:
+            continue
+        click.echo(title(f"[ NEXT STEPS — {team} TEAM ]"))
+        for s in items:
+            click.echo(f"  • {s}")
         click.echo("")
 
-        # ---------- QUICK RISK VIEW ----------
-        click.echo(title("[ QUICK RISK VIEW ]"))
-        a_count = len(dns.get("A", []))
-        exposure = "faible" if a_count <= 5 else "moyenne" if a_count <= 20 else "élevée"
+    # ---------- RISK SCORE ----------
+    score, level = compute_risk_score(
+        total_subdomains=total_subdomains,
+        clouds=clouds,
+        mail_sec=mail_sec,
+        takeover_count=len(takeovers),
+    )
+    click.echo("")
+    click.echo(title("[ RISK SCORE ]"))
+    click.echo(f"  Global score   : {score} / 100")
+    click.echo(f"  Niveau         : {level}")
+    click.echo("")
 
-        click.echo(f"  • Surface DNS       : {exposure}")
-        if has_spf and has_dmarc:
-            click.echo(f"  • Posture mail      : {ok('bonne (SPF/DMARC présents)')}")
-        elif has_spf or has_dmarc:
-            click.echo(f"  • Posture mail      : {warn('partielle (SPF ou DMARC manquant)')}")
-        else:
-            click.echo(f"  • Posture mail      : {bad('faible (ni SPF ni DMARC détectés)')}")
-        if not has_dkim:
-            click.echo(f"  • DKIM              : {warn('à vérifier / configurer si besoin')}")
-        click.echo("")
+    # ---------- QUICK RISK VIEW ----------
+    click.echo(title("[ QUICK RISK VIEW ]"))
+
+    # On base l'exposition sur le nb de sous-domaines découverts
+    if total_subdomains <= 5:
+        exposure = "faible"
+    elif total_subdomains <= 20:
+        exposure = "moyenne"
+    else:
+        exposure = "élevée"
+
+    click.echo(f"  • Surface DNS       : {exposure}")
+    if has_spf and has_dmarc:
+        click.echo(f"  • Posture mail      : {ok('bonne (SPF/DMARC présents)')}")
+    elif has_spf or has_dmarc:
+        click.echo(f"  • Posture mail      : {warn('partielle (SPF ou DMARC manquant)')}")
+    else:
+        click.echo(f"  • Posture mail      : {bad('faible (ni SPF ni DMARC détectés)')}")
+    if not has_dkim:
+        click.echo(f"  • DKIM              : {warn('à vérifier / configurer si besoin')}")
+    click.echo("")
+
 
     # ---- Export JSON optionnel ----
     if outfile:
@@ -913,6 +1072,7 @@ def info(
         with open(outfile, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
         click.echo(f"JSON écrit dans {outfile}")
+
 
 
 # ---------- HISTORY ----------
