@@ -547,7 +547,7 @@ Tu es responsable de l’usage que tu en fais.
 
 ---
 
-## 🗺 Positionnement par rapport aux outils classiques
+## Positionnement par rapport aux outils classiques
 
 RECONDNS ne cherche pas à remplacer Amass/Subfinder/etc., mais à proposer :
 
@@ -604,3 +604,4 @@ Si tu veux proposer une nouvelle feature :
 ---
 
 **Bon recon.** 🛰
+*guepster*
