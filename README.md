@@ -80,7 +80,7 @@ recondns diff-json example.com --md
 ### 1. Cloner le repo
 
 ```bash
-git clone https://github.com/<ton-user>/recondns.git
+git clone https://github.com/guepster/recondns.git
 cd recondns
 ```
 
